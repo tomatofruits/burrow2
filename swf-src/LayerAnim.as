@@ -443,7 +443,8 @@ package com.sbi.graphics
             for(var _loc4_ in param1)
             {
                // (a custom item has its base's art: its own picture makes it another, AJClient.customArtKey)
-               if(!_layers[_loc4_] || _layers[_loc4_].l != param1[_loc4_].l || AJClient.customArtKey("clothing",int(_layers[_loc4_].d)) != AJClient.customArtKey("clothing",int(param1[_loc4_].d)))
+               if(!_layers[_loc4_] || _layers[_loc4_].l != param1[_loc4_].l || AJClient.customArtKey("clothing",int(_layers[_loc4_].d)) != AJClient.customArtKey("clothing",int(param1[_loc4_].d))
+                  || (_layers[_loc4_].hasOwnProperty("s") ? int(_layers[_loc4_].s) : -1) != (param1[_loc4_].hasOwnProperty("s") ? int(param1[_loc4_].s) : -1))
                {
                   _loc2_ = true;
                   break;
@@ -470,10 +471,11 @@ package com.sbi.graphics
                var _loc6_:Object = {};
                for each(var _loc5_:Object in param1)
                {
-                  var _loc7_:int = ImageServerURL.instance.getLayerIndex(_loc5_.l);
-                  var _loc8_:int = int(_loc6_[_loc7_]);
-                  _loc6_[_loc7_] = _loc8_ + 1;
-                  _bitmap.setLayerColor(LayerBitmap.slotFor(_loc7_,_loc8_),_loc5_.c);
+                  var _loc7b_:int = ImageServerURL.instance.getLayerIndex(_loc5_.l);
+                  var _loc8b_:int = int(_loc6_[_loc7b_]);
+                  _loc6_[_loc7b_] = _loc8b_ + 1;
+                  var _locSlot2_:int = _loc5_.hasOwnProperty("s") ? int(_loc5_.s) : LayerBitmap.slotFor(_loc7b_,_loc8b_);
+                  _bitmap.setLayerColor(_locSlot2_,_loc5_.c);
                }
             }
          }
@@ -746,10 +748,12 @@ package com.sbi.graphics
                   {
                      _order[_loc4_] = [];
                   }
-                  _order[_loc4_].push({
-                     "p":_loc6_,
-                     "c":_loc5_.c
-                  });
+                  var _locSO_:Object = {"p":_loc6_,"c":_loc5_.c};
+                  if(_loc5_.hasOwnProperty("s"))
+                  {
+                     _locSO_["s"] = _loc5_.s;
+                  }
+                  _order[_loc4_].push(_locSO_);
                }
             }
             _loc6_++;
@@ -795,12 +799,17 @@ package com.sbi.graphics
                {
                   for each(_loc9_ in _loc8_)
                   {
-                     _receivedData.push({
+                     var _locRO_:Object = {
                         "l":_loc3_,
                         "d":param1.imageData,
                         "c":uint(_loc9_.c),
                         "p":int(_loc9_.p)
-                     });
+                     };
+                     if(_loc9_.hasOwnProperty("s"))
+                     {
+                        _locRO_["s"] = _loc9_.s;
+                     }
+                     _receivedData.push(_locRO_);
                   }
                }
                else
@@ -829,7 +838,8 @@ package com.sbi.graphics
                {
                   var _loc7_:int = int(_loc6_[_loc4_.l]);
                   _loc6_[_loc4_.l] = _loc7_ + 1;
-                  _bitmap.setLayer(LayerBitmap.slotFor(_loc4_.l,_loc7_),_loc4_.d,_loc4_.c,_requestedCacheKey,
+                  var _locSlot_:int = _loc4_.hasOwnProperty("s") ? int(_loc4_.s) : LayerBitmap.slotFor(_loc4_.l,_loc7_);
+                  _bitmap.setLayer(_locSlot_,_loc4_.d,_loc4_.c,_requestedCacheKey,
                      _loc4_.p >= 0 && _layers != null && _layers[_loc4_.p] != null ? int(_layers[_loc4_.p].d) : 0);
                }
                finishAnimRequest();

@@ -168,7 +168,9 @@ package com.sbi.graphics
       // picture: paintLayer), 0 for one of the game's or none known
       public function setLayer(param1:int, param2:Object, param3:uint, param4:String = null, param5:int = 0) : void
       {
-         if(param1 < 0 || param1 > 10 && param1 < 117 || param1 > 275)
+         // 31 to 116 is free: the Layers panel puts a reordered item there
+         // (AvatarUtility.layerArrayForItemsAndColors)
+         if(param1 < 0 || param1 > 275)
          {
             return;
          }
@@ -491,6 +493,21 @@ package com.sbi.graphics
                         }
                      }
                      _loc8_++;
+                  }
+                  _loc5_++;
+               }
+               // the Layers panel's order: 31 upward, in number order, over
+               // everything the game arranges itself
+               _loc5_ = 31;
+               while(_loc5_ <= 116)
+               {
+                  _loc6_ = _activeLayerGroup.layers[_loc5_];
+                  if(_loc6_ != null && _loc6_.o != null && _loc6_.pal != null)
+                  {
+                     if(paintLayer(_loc6_,param1,param2))
+                     {
+                        _loc4_ = true;
+                     }
                   }
                   _loc5_++;
                }

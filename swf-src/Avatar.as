@@ -64,6 +64,7 @@ package avatar
       public var healingPower:Array;
       
       public var defense:Array;
+      public var layersOrder:Array;
       
       public function Avatar()
       {
@@ -118,6 +119,7 @@ package avatar
          inventoryBodyMod.init(_accState);
          inventoryDenFull.init(_accState);
          inventoryDenPartial.init(_accState);
+         layersOrder = null;
       }
       
       public function destroy() : void
@@ -319,9 +321,13 @@ package avatar
          var _loc14_:int = _loc6_ >> 16 & 0xFF;
          var _loc13_:int = _loc6_ >> 8 & 0xFF;
          var _loc12_:int = _loc6_ & 0xFF;
-         _colors[0] = uint(_loc10_ << 24 | _loc11_ << 16 | _loc8_ << 8 | _loc9_);
+         // a custom colour's value is one whole id (PaletteHelper.customColors,
+         // 0xFD000000 and up): the def's colour layers are not part of it, and
+         // cutting it down makes the palette lose the colour. only a def
+         // colour is rebuilt from the layers.
+         _colors[0] = (param1 >> 24 & 0xFF) == 0xFD ? param1 : uint(_loc10_ << 24 | _loc11_ << 16 | _loc8_ << 8 | _loc9_);
          _colors[1] = param2;
-         _colors[2] = uint(_loc7_ << 24 | _loc14_ << 16 | _loc13_ << 8 | _loc12_);
+         _colors[2] = (param3 >> 24 & 0xFF) == 0xFD ? param3 : uint(_loc7_ << 24 | _loc14_ << 16 | _loc13_ << 8 | _loc12_);
          if(!param4)
          {
             dispatchEvent(new AvatarEvent("OnAvatarChanged"));

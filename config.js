@@ -130,7 +130,7 @@ module.exports = {
   // sign in to /dashboard/admin (OAuth2 redirects:
   // <siteUrl>account/discord/callback,
   // <siteUrl>dashboard/admin/discord/callback, and
-  // <siteUrl>dashboard/staff/discord/callback), and a bot in Burrow's Discord
+  // <siteUrl>dashboard/staff/discord/callback), and a bot in Hideout's Discord
   // server for the booster badge. linking is off without the first two, the
   // booster badge left alone without the last two.
   discord: {
@@ -167,14 +167,14 @@ module.exports = {
   // 39: chat drawn as text and never as markup, the chat filter, and the
   // game no longer open to SWFs from other addresses.
   // 40: the chat filter's window laid out again.
-  // 41: the game's text says "Burrow" where it said Animal Jam.
+  // 41: the game's text says "Hideout" where it said Animal Jam.
   // 48: the item giver (the item finder renamed) with previews and hex colours;
   // 49 and 50: its link to a colour picker.
   // 61: the Owner, Moderator, Developer and Verified name tag badges seen by everyone.
   // 62: "Custom pictures" in the settings menu, to hide players' item pictures.
   // 83: den items tinted (the tint in their version, DenItemHelper.applyTint).
   // 84: fixes from the owner's list of bugs (bugs.txt, 2026-10-23).
-  buildVersion: env.AJ_BUILD_VERSION || "92",
+  buildVersion: env.AJ_BUILD_VERSION || "93",
   // what the official CDN is asked for; not ours to change.
   upstreamBuildVersion: "3",
 
@@ -356,7 +356,7 @@ module.exports = {
   // before it paints one (AJ_MASTERPIECE_MIN_AGE; the tests use 0), and new
   // pictures an account may post in any 24 hours.
   masterpieceMinAccountAge: env.AJ_MASTERPIECE_MIN_AGE === undefined ? 86400 : Number(env.AJ_MASTERPIECE_MIN_AGE),
-  masterpiecesPerDay: 10,
+  masterpiecesPerDay: 100000,
   maxConnections: 2000,
   maxHttpConnections: 2000, // open at once, in all
   maxHttpConnectionsPerAddress: 40, // the game opens a good many at once while it loads
@@ -395,8 +395,7 @@ module.exports = {
   maxBytesPerTenSeconds: 512 * 1024, // per game socket; saving a full den is about 40 KB
   // custom colours (lib/colours.js). every one ever made is sent to every
   // player at every login and is never taken out again, so there is an end
-  // to how many one account may add in a day and to the table as a whole.
-  customColoursPerDay: 30,
+  // to how many there can be as a whole.
   maxCustomColours: 20000,
 
   // may a client pick, when it logs in, how the game should treat the

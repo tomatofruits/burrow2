@@ -469,7 +469,7 @@
       <aside id="side">
         <div class="brand">
           <img class="mark" src="/logo.png" alt="">
-          <div><h1>Burrow dashboard</h1><span class="hint" id="who"></span></div>
+          <div><h1>Hideout dashboard</h1><span class="hint" id="who"></span></div>
         </div>
         <nav role="tablist" aria-orientation="vertical">
           <button role="tab" data-tab="home" data-needs="player.view" aria-selected="true"><span class="icon" aria-hidden="true">&#9673;</span>Dashboard</button>
@@ -485,7 +485,10 @@
           <button role="tab" data-tab="review" data-needs="items.approve" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#10004;</span>Review</button>
           <button role="tab" data-tab="wear-rules" data-needs="items.restrict" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#9873;</span>Wear rules</button>
           <button role="tab" data-tab="items" data-needs="items.create" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#10070;</span>Items</button>
-          <button role="tab" data-tab="music" data-needs="music.upload" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#9835;</span>Music</button>
+          <button role="tab" data-tab="pets" data-needs="items.approve" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#128054;</span>Pets</button>
+      <button role="tab" data-tab="journals" data-needs="journal.edit" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#9998;</span>Journals</button>
+      <button role="tab" data-tab="emojis" data-needs="emoji.add" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#9786;</span>Emojis</button>
+      <button role="tab" data-tab="music" data-needs="music.upload" aria-selected="false" hidden><span class="icon" aria-hidden="true">&#9835;</span>Music</button>
         </nav>
         <button id="sign-out" type="button">Sign out</button>
       </aside>
@@ -905,7 +908,85 @@
         </section>
       </div>
 
-      <div data-view="music" hidden>
+      <div data-view="pets" hidden>
+  <section>
+    <h2>Make a pet from a picture</h2>
+    <p class="hint">A PNG picture (1 MB at most) becomes a pet for the player named below, once a moderator approves it on the Review page — every picture pet waits there, whoever put it in. Draw it facing forward with nothing behind it: it is made small automatically, the greater side the pet's size. The player gets the pet and a Jam-A-Gram on their next fresh load of the game.</p>
+    <div class="actions">
+      <div class="action">
+        <h3>The pet</h3>
+        <div class="row"><input id="pet-file" type="file" accept=".png,image/png" aria-label="PNG picture"></div>
+        <div class="row" style="margin-top:8px"><input id="pet-name" maxlength="30" placeholder="The pet's name" aria-label="Name"></div>
+        <div class="row" style="margin-top:8px"><input id="pet-user" maxlength="20" placeholder="For which player (username)" aria-label="Their username"></div>
+        <div class="row" style="margin-top:8px"><select id="pet-type" aria-label="Kind">
+          <option value="0">On land</option>
+          <option value="2">In the water</option>
+          <option value="1">Flying (land rooms)</option>
+          <option value="3">Flying (ocean rooms)</option>
+        </select></div>
+        <div class="row" style="margin-top:8px"><button type="button" class="primary" id="pet-upload">Put it in for approval</button></div>
+      </div>
+    </div>
+    <p class="status" id="pet-status" role="status"></p>
+  </section>
+  <section>
+    <h2>Picture pets</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Picture</th><th>Name</th><th>For</th><th>State</th><th></th></tr></thead>
+      <tbody id="pet-list"></tbody>
+    </table></div>
+    <div class="empty" id="no-pet" hidden>None yet.</div>
+  </section>
+</div>
+<div data-view="journals" hidden>
+  <section>
+    <h2>Add a Jamaa Journal page</h2>
+    <p class="hint">A PNG page picture (2 MB at most) becomes a page of the in-game Jamaa Journal: players open it from the newspaper button (the Jam Mart's news). Pages appear oldest first, and a fresh one carries the "new" mark until read.  A player gets new pages on their next fresh load of the game (the paper keeps its pages for the session). The picture should be drawn at newspaper page size (about 600 by 420), text baked in.</p>
+    <div class="actions">
+      <div class="action">
+        <h3>The page</h3>
+        <div class="row"><input id="journal-file" type="file" accept=".png,image/png" aria-label="PNG page picture"></div>
+        <p class="hint" style="margin:6px 0 0">The strip's small picture (the icon the page is picked by). Without one the page picture is used, shrunk.</p>
+        <div class="row" style="margin-top:8px"><input id="journal-icon" type="file" accept=".png,image/png" aria-label="PNG icon for the strip"></div>
+        <div class="row" style="margin-top:8px"><input id="journal-title" maxlength="60" placeholder="Title (as it is listed)" aria-label="Title"></div>
+        <div class="row" style="margin-top:8px"><button type="button" class="primary" id="journal-upload">Add the page</button></div>
+      </div>
+    </div>
+    <p class="status" id="journal-status" role="status"></p>
+  </section>
+  <section>
+    <h2>The paper's pages</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Page</th><th>Title</th><th>Added</th><th></th></tr></thead>
+      <tbody id="journal-list"></tbody>
+    </table></div>
+    <div class="empty" id="no-journal" hidden>None yet.</div>
+  </section>
+</div>
+<div data-view="emojis" hidden>
+  <section>
+    <h2>Add an emoji</h2>
+    <p class="hint">A PNG (64 KB at most) becomes a chat emoji at once: it fills the open cells at the bottom of the chat box's emoji panel, and ":name:" in a line becomes it. Names are letters, digits and underscores, e.g. <code>cheese</code> for <code>:cheese:</code>. A name again replaces its picture.</p>
+    <div class="actions">
+      <div class="action">
+        <h3>The picture</h3>
+        <div class="row"><input id="emoji-file" type="file" accept=".png,image/png" aria-label="PNG picture"></div>
+        <div class="row" style="margin-top:8px"><input id="emoji-name" maxlength="30" placeholder="Name (as :cheese: — cheese)" aria-label="Name"></div>
+        <div class="row" style="margin-top:8px"><button type="button" class="primary" id="emoji-upload">Upload</button></div>
+      </div>
+    </div>
+    <p class="status" id="emoji-status" role="status"></p>
+  </section>
+  <section>
+    <h2>Custom emojis</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Emoji</th><th>Name</th><th>Added</th><th></th></tr></thead>
+      <tbody id="emoji-list"></tbody>
+    </table></div>
+    <div class="empty" id="no-emoji" hidden>None yet.</div>
+  </section>
+</div>
+<div data-view="music" hidden>
         <section>
           <h2>Upload music</h2>
           <p class="hint">An MP3 becomes a den music track at once, with no restart: players get it from the item finder (and the shop, if it is on sale) and play it in their dens like the game's own tracks. 44.1 kHz MP3s play best; 15 MB at most.</p>
@@ -2665,11 +2746,13 @@
       // it can be judged too and the arrow keys go through the others.
       let reviewList = [];
       let reviewShown = "";
+      const reviewWhat = entry => (entry.kind === "pet" ? "A picture pet"
+        : `${entry.waiting === "item" ? "A new item" : "A new picture"} · ${entry.kind === "den" ? "den item" : "clothing"} from ${entry.baseName}`);
       const reviewButtons = entry => {
         const buttons = el("div", undefined, "buttons");
         const decide = approve => async () => {
           // turning away asks first; approving does not
-          if (!approve && !confirm(`Turn away ${entry.waiting === "item" ? "the item" : "the picture of"} "${entry.name}" by ${entry.maker}?`)) {
+          if (!approve && !confirm(`Turn away ${entry.kind === "pet" ? "the picture pet" : entry.waiting === "item" ? "the item" : "the picture of"} "${entry.name}" by ${entry.maker}?`)) {
             return;
           }
           const result = await api("review", {kind: entry.kind, id: entry.id, approve});
@@ -2681,7 +2764,7 @@
         return buttons;
       };
       const reviewPictures = () => reviewList.filter(entry => entry.artUrl).map(entry => ({src: entry.artUrl, small: true, title: entry.name,
-        detail: `${entry.waiting === "item" ? "A new item" : "A new picture"} by ${entry.maker}`, buttons: () => reviewButtons(entry)}));
+        detail: `${entry.kind === "pet" ? "A picture pet" : entry.waiting === "item" ? "A new item" : "A new picture"} by ${entry.maker}`, buttons: () => reviewButtons(entry)}));
       const renderReview = data => {
         const waiting = data.waiting || [];
         reviewList = waiting;
@@ -2704,7 +2787,7 @@
             art.append(picture);
           }
           const about = el("div");
-          about.append(el("strong", entry.name), el("div", `${entry.waiting === "item" ? "A new item" : "A new picture"} · ${entry.kind === "den" ? "den item" : "clothing"} from ${entry.baseName}`, "hint"),
+          about.append(el("strong", entry.name), el("div", reviewWhat(entry), "hint"),
             el("div", `by ${entry.maker} · ${when(entry.createdAt)}${entry.makerStrikes ? ` · ${entry.makerStrikes} of ${data.strikes} pictures turned away before` : ""}`, "hint"));
           card.append(art, about, reviewButtons(entry));
           return card;
@@ -2862,6 +2945,244 @@
         await loadMusic();
       });
 
+
+      // ---- custom emojis for the chat box (lib/emojis.js): a PNG fills the
+      // emoji panel's open cells, and :name: in a line becomes it
+      const EMOJI_API = "/mod/api/emojis";
+      const emojiCall = async (query, body) => {
+        try {
+          const response = await fetch(`${EMOJI_API}${query}`, {method: "POST", headers: {"Content-Type": "image/png"}, body});
+          return await response.json().catch(() => ({error: "That did not work."}));
+        }
+        catch (err) {
+          return {error: "The server did not answer."};
+        }
+      };
+      const renderEmojis = data => {
+        const emojiRows = data.emojis || [];
+        $("no-emoji").hidden = emojiRows.length > 0;
+        $("emoji-list").replaceChildren(...emojiRows.map(entry => {
+          const row = el("tr");
+          const pic = el("td");
+          const img = el("img");
+          img.src = `${EMOJI_API}?view=${encodeURIComponent(entry.name)}`;
+          img.width = 24;
+          img.height = 24;
+          img.style.cssText = "display:block";
+          pic.append(img);
+          const actions = el("td");
+          actions.append(button("Delete", async () => {
+            if (!confirm(`Take ":${entry.name}:" out of every player's chat?`)) {
+              return;
+            }
+            const result = await emojiCall(`?delete=${encodeURIComponent(entry.name)}`, new Uint8Array(0));
+            setStatus($("emoji-status"), result.ok || result.error || "That did not work.", !result.ok);
+            await loadEmojis();
+          }, "danger"));
+          row.append(pic, el("td", `${entry.name}`), el("td", `${when(entry.at)} · ${entry.by}`), actions);
+          return row;
+        }));
+      };
+      const loadEmojis = async () => {
+        try {
+          const response = await fetch(EMOJI_API);
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) {
+            renderEmojis(data);
+          }
+        }
+        catch (err) {
+          // shown again with the next refresh
+        }
+      };
+      const emojiFileName = from => from.replace(/\.png$/i, "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 30);
+      $("emoji-file").addEventListener("change", () => {
+        const file = $("emoji-file").files[0];
+        if (file && !$("emoji-name").value.trim()) {
+          $("emoji-name").value = emojiFileName(file.name);
+        }
+      });
+      $("emoji-upload").addEventListener("click", async () => {
+        const file = $("emoji-file").files[0];
+        const name = $("emoji-name").value.trim().toLowerCase();
+        if (!file || !name) {
+          setStatus($("emoji-status"), file ? "Give the emoji a name." : "Choose a PNG first.", true);
+          return;
+        }
+        $("emoji-upload").disabled = true;
+        setStatus($("emoji-status"), "Uploading...");
+        const result = await emojiCall(`?name=${encodeURIComponent(name)}`, new Uint8Array(await file.arrayBuffer()));
+        $("emoji-upload").disabled = false;
+        setStatus($("emoji-status"), result.ok || result.error || "That did not work.", !result.ok);
+        if (result.ok) {
+          $("emoji-file").value = "";
+          $("emoji-name").value = "";
+        }
+        await loadEmojis();
+      });
+
+
+      // ---- the Jamaa Journal's pages (lib/journals.js): a picture a page,
+      // in the game's newspaper beside the official pages
+      const JOURNAL = "/mod/api/journals";
+      const journalCall = async (query, body) => {
+        try {
+          const response = await fetch(`${JOURNAL}${query}`, {method: "POST", headers: {"Content-Type": "image/png"}, body});
+          return await response.json().catch(() => ({error: "That did not work."}));
+        }
+        catch (err) {
+          return {error: "The server did not answer."};
+        }
+      };
+      const renderJournals = data => {
+        const pages = data.pages || [];
+        $("no-journal").hidden = pages.length > 0;
+        $("journal-list").replaceChildren(...pages.map(page => {
+          const row = el("tr");
+          const pic = el("td");
+          const img = el("img");
+          img.src = `${JOURNAL}?view=${page.num}`;
+          img.width = 96;
+          img.height = 67;
+          img.style.cssText = "display:block;object-fit:cover";
+          pic.append(img);
+          const actions = el("td");
+          actions.append(button("Delete", async () => {
+            if (!confirm(`Take "${page.title}" out of every player's Jamaa Journal?`)) {
+              return;
+            }
+            const result = await journalCall(`?delete=${page.num}`, new Uint8Array(0));
+            setStatus($("journal-status"), result.ok || result.error || "That did not work.", !result.ok);
+            await loadJournals();
+          }, "danger"));
+          row.append(pic, el("td", page.title), el("td", `${when(page.at)} · ${page.by}`), actions);
+          return row;
+        }));
+      };
+      const loadJournals = async () => {
+        try {
+          const response = await fetch(JOURNAL);
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) {
+            renderJournals(data);
+          }
+        }
+        catch (err) {
+          // shown again with the next refresh
+        }
+      };
+      $("journal-file").addEventListener("change", () => {
+        const file = $("journal-file").files[0];
+        if (file && !$("journal-title").value.trim()) {
+          $("journal-title").value = file.name.replace(/\.png$/i, "").replace(/[_]+/g, " ").slice(0, 60);
+        }
+      });
+      $("journal-upload").addEventListener("click", async () => {
+        const file = $("journal-file").files[0];
+        const iconFile = $("journal-icon").files[0];
+        const title = $("journal-title").value.trim();
+        if (!file || !title) {
+          setStatus($("journal-status"), file ? "Give the page a title." : "Choose a PNG first.", true);
+          return;
+        }
+        $("journal-upload").disabled = true;
+        setStatus($("journal-status"), "Uploading...");
+        const form = new FormData();
+        form.append("title", title);
+        form.append("page", file);
+        if (iconFile) {
+          form.append("icon", iconFile);
+        }
+        let result;
+        try {
+          const response = await fetch(JOURNAL, {method: "POST", body: form});
+          result = await response.json().catch(() => ({error: "That did not work."}));
+        }
+        catch (err) {
+          result = {error: "The server did not answer."};
+        }
+        $("journal-upload").disabled = false;
+        setStatus($("journal-status"), result.ok || result.error || "That did not work.", !result.ok);
+        if (result.ok) {
+          $("journal-file").value = "";
+          $("journal-icon").value = "";
+          $("journal-title").value = "";
+        }
+        await loadJournals();
+      });
+
+
+      // ---- picture pets (lib/picturepets.js): a picture a pet, approved on
+      // the Review page before the named player gets it
+      const PICTURE_PETS = "/mod/api/picturepets";
+      const petCall = async (query, body) => {
+        try {
+          const response = await fetch(`${PICTURE_PETS}${query}`, {method: "POST", headers: {"Content-Type": "image/png"}, body});
+          return await response.json().catch(() => ({error: "That did not work."}));
+        }
+        catch (err) {
+          return {error: "The server did not answer."};
+        }
+      };
+      const renderPicturePets = data => {
+        const rows = data.pets || [];
+        $("no-pet").hidden = rows.length > 0;
+        $("pet-list").replaceChildren(...rows.map(entry => {
+          const row = el("tr");
+          const pic = el("td");
+          const img = el("img");
+          img.src = `${PICTURE_PETS}?view=${entry.num}`;
+          img.width = 48;
+          img.height = 48;
+          img.style.cssText = "display:block;object-fit:contain";
+          pic.append(img);
+          const actions = el("td");
+          actions.append(button("Delete", async () => {
+            if (!confirm(`Delete the picture pet "${entry.name}"?`)) {
+              return;
+            }
+            const result = await petCall(`?delete=${entry.num}`, new Uint8Array(0));
+            setStatus($("pet-status"), result.ok || result.error || "That did not work.", !result.ok);
+            await loadPicturePets();
+          }, "danger"));
+          row.append(pic, el("td", entry.name), el("td", entry.username), el("td", entry.state === "approved" ? "approved" : "waiting for approval"), actions);
+          return row;
+        }));
+      };
+      const loadPicturePets = async () => {
+        try {
+          const response = await fetch(PICTURE_PETS);
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) {
+            renderPicturePets(data);
+          }
+        }
+        catch (err) {
+          // shown again with the next refresh
+        }
+      };
+      $("pet-upload").addEventListener("click", async () => {
+        const file = $("pet-file").files[0];
+        const name = $("pet-name").value.trim();
+        const user = $("pet-user").value.trim();
+        if (!file || !name || !user) {
+          setStatus($("pet-status"), !file ? "Choose a PNG first." : !name ? "Give the pet a name." : "Say which player it is for.", true);
+          return;
+        }
+        $("pet-upload").disabled = true;
+        setStatus($("pet-status"), "Uploading...");
+        const query = `?name=${encodeURIComponent(name)}&username=${encodeURIComponent(user)}&type=${encodeURIComponent($("pet-type").value)}`;
+        const result = await petCall(query, new Uint8Array(await file.arrayBuffer()));
+        $("pet-upload").disabled = false;
+        setStatus($("pet-status"), result.ok ? "Waiting for a moderator on the Review page." : (result.error || "That did not work."), !result.ok);
+        if (result.ok) {
+          $("pet-file").value = "";
+          $("pet-name").value = "";
+          $("pet-user").value = "";
+        }
+        await loadPicturePets();
+      });
+
       const refresh = async () => {
         clearTimeout(timer);
         if (!signedIn) {
@@ -3012,6 +3333,15 @@
         }
         else if (shown === "music") {
           await loadMusic();
+        }
+        else if (shown === "emojis") {
+          await loadEmojis();
+        }
+        else if (shown === "journals") {
+          await loadJournals();
+        }
+        else if (shown === "pets") {
+          await loadPicturePets();
         }
         else if (shown === "items") {
           const result = await api("items");

@@ -165,7 +165,7 @@ package pet
             this.mouseChildren = false;
             this.mouseEnabled = false;
          }
-         if(isEggAndHasNotHatched || (getType() == 0 || getType() == 2 || getType() == 4))
+         if(isEggAndHasNotHatched() || (getType() == 0 || getType() == 2 || getType() == 4))
          {
             if(_parent.isPetForm())
             {
@@ -293,7 +293,10 @@ package pet
             }
             if(_bUpdateState)
             {
-               PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+               if(_content.pet != null)
+      {
+         PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+      }
                _bUpdateState = false;
             }
             _loc5_ = _parent.inSplashVolume() ? 10 : 0;
@@ -318,14 +321,20 @@ package pet
             if((param2 || _lastAnim <= 4) && _lastAnim != _loc4_)
             {
                _lastAnim = _loc4_;
-               _content.pet.setAnim(_loc4_);
+               if(_content.pet != null)
+      {
+         _content.pet.setAnim(_loc4_);
+      }
             }
             if(_bSpecialMove)
             {
                _bSpecialMove = false;
                if(!param2)
                {
-                  _content.pet.setAnim(4 + _loc5_);
+                  if(_content.pet != null)
+      {
+         _content.pet.setAnim(4 + _loc5_);
+      }
                }
             }
          }
@@ -364,7 +373,10 @@ package pet
                   _lastAnim = _loc2_;
                   if(_content)
                   {
-                     _content.pet.setAnim(_loc2_);
+                     if(_content.pet != null)
+      {
+         _content.pet.setAnim(_loc2_);
+      }
                   }
                }
                break;
@@ -386,9 +398,15 @@ package pet
       {
          if(_parent.isPetForm())
          {
-            _content.pet.scaleX = _content.pet.scaleY = 2;
+            if(_content.pet != null)
+      {
+         _content.pet.scaleX = _content.pet.scaleY = 2;
+      }
          }
+         if(_content.pet != null)
+      {
          _content.pet.setSparkle(_sparkle);
+      }
       }
       
       private function convertAvtAnimToPetAnim() : int

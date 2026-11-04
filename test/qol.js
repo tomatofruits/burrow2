@@ -45,6 +45,18 @@ const run = async () => {
   assert.strictEqual(room, TOWNSHIP);
   assert.strictEqual(login.params.pendingFlags & 2, 2); // the client's bigger inventories
 
+  // skips the stale "il" messages (the worn list of one animal, three fields
+  // per item at index 9) until Ben is told Ann wears exactly the two
+  const wornOnB = async expected => {
+    for (;;) {
+      const heard = await b.untilXt("il");
+      if (heard[2] === "1" && heard[5] === "Ann" && Number(heard[8]) === 2
+        && String(heard[10]) === String(expected[0]) && String(heard[13]) === String(expected[1])) {
+        return heard;
+      }
+    }
+  };
+
   // --- !go: by short name, by a room's own name, and not to nowhere
   say(a, roomId, "!go nowhere");
   assert.match(await told(a), /no place called nowhere/);
@@ -184,6 +196,209 @@ const run = async () => {
   a.xt("pn", roomId, made[5], 15386, 15428);
   assert.deepStrictEqual((await a.untilXt("pn")).slice(2), ["1", made[5], "15386|15428"]);
 
+  // --- a custom emoji put in by staff (lib/emojis.js): the panels' route
+  // keeps the picture, a connected game is told at once ("xes"), and the
+  // picture is served to anyone who asks. setup needs an admin sign-in.
+  const webSession = () => {
+    let cookie = "";
+    return async (pathName, body) => {
+      const isPng = Buffer.isBuffer(body);
+      const headers = {cookie};
+      const options = body === undefined ? {headers} : {method: "POST", headers: headers["Content-Type"] = isPng ? {...headers, "Content-Type": "image/png"} : {...headers, "Content-Type": "application/json"}, body: isPng ? body : JSON.stringify(body)};
+      const response = await fetch(`${BASE}${pathName}`, options);
+      const set = response.headers.get("set-cookie");
+      if (set) {
+        cookie = set.split(";")[0];
+      }
+      return {status: response.status, data: await response.json().catch(() => ({}))};
+    };
+  };
+  const emojiPanel = webSession();
+  assert.strictEqual((await emojiPanel("/admin/api/setup", {password: "AdminPass99!"})).status, 200);
+  assert.strictEqual((await emojiPanel("/admin/api/login", {password: "AdminPass99!"})).status, 200);
+  const pngBody = applePng();
+  function applePng() {
+    // a real 24x24 PNG, assembled here (IHDR, red-green pixels, IEND)
+    const colour = [200, 40, 160];
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(24, 0); ihdr.writeUInt32BE(24, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const raw = Buffer.alloc(24 * (1 + 24 * 3));
+    for (let y = 0; y < 24; y++) {
+      const row = y * (1 + 24 * 3);
+      for (let x = 0; x < 24; x++) {
+        raw[row + 1 + x * 3] = colour[0]; raw[row + 1 + x * 3 + 1] = colour[1]; raw[row + 1 + x * 3 + 2] = colour[2];
+      }
+    }
+    const table = [];
+    for (let n = 0; n < 256; n++) {
+      let v = n;
+      for (let k = 0; k < 8; k++) {
+        v = (v & 1) ? (0xEDB88320 ^ (v >>> 1)) : (v >>> 1);
+      }
+      table[n] = v >>> 0;
+    }
+    const crcOf = buf => {
+      let c = 0xFFFFFFFF;
+      for (const b of buf) { c = table[(c ^ b) & 0xFF] ^ (c >>> 8); }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const typeBuf = Buffer.from(type, "ascii");
+      const crc = Buffer.alloc(4); crc.writeUInt32BE(crcOf(Buffer.concat([typeBuf, data])));
+      return Buffer.concat([len, typeBuf, data, crc]);
+    };
+    return Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+      chunk("IHDR", ihdr),
+      chunk("IDAT", require("zlib").deflateSync(raw)),
+      chunk("IEND", Buffer.alloc(0))
+    ]);
+  }
+  const putUp = await emojiPanel("/admin/api/emojis?name=cheese", pngBody);
+  assert.strictEqual(putUp.status, 200, JSON.stringify(putUp.data));
+  const heardEmoji = await a.untilXt("xes");
+  assert.deepStrictEqual(heardEmoji.slice(2), ["a", "cheese"]);
+  const emojiPicture = await fetch(`${BASE}/emoji/custom/cheese.png`);
+  assert.strictEqual(emojiPicture.status, 200);
+  assert.ok((await emojiPicture.arrayBuffer()).byteLength > 0);
+  const gone = await emojiPanel("/admin/api/emojis?delete=cheese", new Uint8Array(0));
+  assert.strictEqual(gone.status, 200, JSON.stringify(gone.data));
+  await b.untilXt("xes");
+  assert.strictEqual((await fetch(`${BASE}/emoji/custom/cheese.png`)).status, 404);
+  assert.deepStrictEqual((await emojiPanel("/admin/api/emojis")).data.emojis, []);
+
+  // --- the Jamaa Journal's pages (lib/journals.js): staff add a picture a
+  // page; it is in the newspaper's defPack (1065), in its list (627), its
+  // media is served, and a read is kept ("nps")
+  const journalPng = (() => {
+    const zlib = require("zlib");
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(24, 0); ihdr.writeUInt32BE(24, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const raw = Buffer.alloc(24 * (1 + 24 * 3));
+    for (let y = 0; y < 24; y++) {
+      const row = y * (1 + 24 * 3);
+      for (let x = 0; x < 24; x++) {
+        raw[row + 1 + x * 3] = 30; raw[row + 1 + x * 3 + 1] = 120; raw[row + 1 + x * 3 + 2] = 220;
+      }
+    }
+    const table = [];
+    for (let n = 0; n < 256; n++) {
+      let v = n;
+      for (let k = 0; k < 8; k++) {
+        v = (v & 1) ? (0xEDB88320 ^ (v >>> 1)) : (v >>> 1);
+      }
+      table[n] = v >>> 0;
+    }
+    const crcOf = buf => {
+      let c = 0xFFFFFFFF;
+      for (const b of buf) { c = table[(c ^ b) & 0xFF] ^ (c >>> 8); }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const t = Buffer.from(type, "ascii");
+      const crc = Buffer.alloc(4); crc.writeUInt32BE(crcOf(Buffer.concat([t, data])));
+      return Buffer.concat([len, t, data, crc]);
+    };
+    return Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+      chunk("IHDR", ihdr),
+      chunk("IDAT", zlib.deflateSync(raw)),
+      chunk("IEND", Buffer.alloc(0))
+    ]);
+  })();
+  const journalAdmin = emojiPanel; // already set up and signed in above
+  const addedPage = await journalAdmin("/admin/api/journals?title=" + encodeURIComponent("An overview"), journalPng);
+  assert.strictEqual(addedPage.status, 200, JSON.stringify(addedPage.data));
+  const journalPages = (await journalAdmin("/admin/api/journals")).data.pages;
+  assert.strictEqual(journalPages.length, 1);
+  const pageNum = journalPages[0].num;
+  const pageDefId = pageNum - 1; // the paper's pages are numbered by place
+  // the picture, as the game's media
+  const pageMedia = await fetch(BASE + "/" + require("../lib/cdn.js").hashedPath("media/" + (50000 + pageNum)));
+  assert.strictEqual(pageMedia.status, 200, "page movie at " + require("../lib/cdn.js").hashedPath("media/" + (50000 + pageNum)));
+  const pageSwf = Buffer.from(await pageMedia.arrayBuffer());
+  assert.ok(pageSwf.subarray(0, 3).toString("latin1") === "FWS" || pageSwf.subarray(0, 3).toString("latin1") === "CWS");
+  // the newspaper's list names it
+  a.xt("gl", roomId, 627);
+  const paperList = await a.untilXt("gl");
+  assert.ok(paperList.slice(9).map(Number).includes(pageDefId), "the journal list has the page");
+  // the defpack the newspaper reads has its row
+  const packBytes = await (await fetch(BASE + "/" + require("../lib/cdn.js").hashedPath("defPacks/1065"))).arrayBuffer();
+  const pack = require("../lib/amf3.js").decode(require("zlib").inflateRawSync(Buffer.from(packBytes)));
+  assert.strictEqual(pack[String(pageDefId)].name, "An overview");
+  assert.strictEqual(Number(pack[String(pageDefId)].pageMediaRefId), 50000 + pageNum);
+  // a read is kept, and answered
+  a.xt("nps", roomId, pageDefId);
+  const seenReply = await a.untilXt("nps");
+  assert.strictEqual(Number(seenReply[2]), pageDefId);
+  assert.ok(Number(seenReply[3]) > 0);
+  // and it can be taken out again
+  assert.strictEqual((await journalAdmin("/admin/api/journals?delete=" + pageNum, new Uint8Array(0))).status, 200);
+  assert.deepStrictEqual((await journalAdmin("/admin/api/journals")).data.pages, []);
+
+  // --- a picture pet (lib/picturepets.js): put in from the panel, waiting
+  // for a moderator on the Review page with the item pictures, approved onto
+  // the named player's account; its def and its picture reach the game
+  const petPng = journalPng; // the same 24-square PNG does
+  const petAdmin = emojiPanel; // already set up and signed in above
+  const putPet = await petAdmin("/admin/api/picturepets?name=Pixel&username=Ann&type=0", petPng);
+  assert.strictEqual(putPet.status, 200, JSON.stringify(putPet.data));
+  const picturePets = (await petAdmin("/admin/api/picturepets")).data.pets;
+  assert.strictEqual(picturePets.length, 1);
+  assert.strictEqual(picturePets[0].state, "pending");
+  const petNum = picturePets[0].num;
+  // in the same queue as the item pictures
+  const queue = (await petAdmin("/admin/api/review")).data.waiting;
+  assert.ok(queue.some(entry => entry.kind === "pet" && Number(entry.id) === petNum && entry.name === "Pixel"));
+  // approved: Ann's account has it, and the game's pet pack names it
+  const approvedPet = await petAdmin("/admin/api/review", {kind: "pet", id: petNum, approve: true});
+  assert.strictEqual(approvedPet.status, 200);
+  assert.match(String(approvedPet.data.ok || ""), /Jam-A-Gram/);
+  // the card itself, in Ann's game (lib/ecards.js noteFromHq)
+  a.xt("el", roomId, 0);
+  const gramList = await a.untilXt("el");
+  const petGrams = [];
+  for (let at = 3; at + 17 <= gramList.length; at += 17) {
+    petGrams.push(gramList.slice(at, at + 17));
+  }
+  assert.ok(petGrams.some(card => /Your pet, Pixel, has been approved/.test(card[5])), "the pet's owner hears of its approval");
+  a.xt("pl", roomId, "Ann");
+  const petList = await a.untilXt("pl");
+  assert.ok(petList.includes("Pixel"), "Ann's pet list has the picture pet");
+  const petDefId = 200 + (petNum % 56);
+  const defpackUrl = require("../lib/cdn.js").hashedPath("defPacks/1046");
+  const petPack = require("../lib/amf3.js").decode(require("zlib").inflateRawSync(Buffer.from(await (await fetch(BASE + "/" + defpackUrl)).arrayBuffer())));
+  assert.strictEqual(String(petPack[String(petDefId)].mediaRefId), String(45000 + petNum));
+  // the panel's own preview of it (the Pets tab's icon)
+  const petPreview = await petAdmin("/admin/api/picturepets?view=" + petNum);
+  assert.strictEqual(petPreview.status, 200, "pet preview " + JSON.stringify(petPreview.data).slice(0, 80));
+  const petPicture = await fetch(BASE + "/" + require("../lib/cdn.js").hashedPath("media/" + (45000 + petNum)));
+  assert.strictEqual(petPicture.status, 200);
+  const petMovie = Buffer.from(await petPicture.arrayBuffer());
+  assert.ok(petMovie.subarray(0, 3).toString("latin1").match(/^[FC]WS$/));
+  // its stage: the picture centered on the origin, its bottom there (a pet
+  // stands on its spot, the name tag below), not its top-left as item art is
+  const petStage = (() => {
+    let at = 8, bit = 0;
+    const bits = count => {
+      let value = 0;
+      for (let n = 0; n < count; n++) {
+        value = (value << 1) | ((petMovie[at] >> (7 - bit)) & 1);
+        if (++bit === 8) { bit = 0; at++; }
+      }
+      return value;
+    };
+    const signed = count => (bits(count) << (32 - count)) >> (32 - count);
+    const n = bits(5);
+    return [signed(n), signed(n), signed(n), signed(n)].map(value => value / 20);
+  })();
+  assert.deepStrictEqual(petStage, [-12, 12, -24, 0], "the pet picture is centered and stands on the origin");
+  // and it can be taken out
+  assert.strictEqual((await petAdmin("/admin/api/picturepets?delete=" + petNum, new Uint8Array(0))).status, 200);
+  assert.deepStrictEqual((await petAdmin("/admin/api/picturepets")).data.pets, []);
+
   // --- she starts in the township as ever, in a look picked at random if she asked for one
   say(a, roomId, "!theme random on");
   assert.match(await told(a), /picked at random/);
@@ -209,3 +424,4 @@ harness.withServer("comforts test", HTTP_PORT, GAME_PORT, run).catch(err => {
   console.error(err);
   process.exit(1);
 });
+

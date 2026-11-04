@@ -180,7 +180,14 @@ package avatar
          var _loc1_:AvatarInfo = null;
          var _loc2_:AccItemCollection = null;
          var _loc3_:* = null;
-         if(_avatar.inventoryBodyMod && _avatar.inventoryBodyMod.itemCollection && _avatar.inventoryBodyMod.itemCollection.length >= 1)
+         // the animal's own items are in the order the Layers panel arranged
+         // (AJClient): use them even when it wears no body mod, so its order
+         // is what the view draws. the cached list is only for an animal
+         // whose items were not sent.
+         if(_avatar.inventoryBodyMod && _avatar.inventoryBodyMod.itemCollection
+            && (_avatar.inventoryBodyMod.itemCollection.length >= 1
+               || _avatar.inventoryClothing && _avatar.inventoryClothing.itemCollection
+                  && _avatar.inventoryClothing.itemCollection.length >= 1))
          {
             _loc3_ = new AccItemCollection(_avatar.inventoryBodyMod.itemCollection.concatCollection(_avatar.inventoryClothing.itemCollection));
          }
@@ -196,7 +203,7 @@ package avatar
                }
             }
          }
-         return AvatarUtility.layerArrayForItemsAndColors(_loc3_,_avatar.colors,_avatar.avInvId,_avatar.roomType,_skipAnimEnviroCheck);
+         return AvatarUtility.layerArrayForItemsAndColors(_loc3_,_avatar.colors,_avatar.avInvId,_avatar.roomType,_skipAnimEnviroCheck,_avatar.userName);
       }
       
       public function playAnim(param1:int, param2:Boolean = false, param3:int = 0, param4:Function = null, param5:Boolean = false) : void

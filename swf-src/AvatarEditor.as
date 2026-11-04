@@ -40,6 +40,7 @@ package gui
    import flash.geom.Point;
    import flash.text.TextField;
    import flash.text.TextFormat;
+   import game.ArtStudioKit;
    import gui.itemWindows.ItemWindowNameBarIcon;
    import gui.itemWindows.ItemWindowOriginal;
    import inventory.Iitem;
@@ -283,6 +284,9 @@ package gui
       private var _namebarBadgeImages:Array;
       
       private var _shop:Shop;
+
+      // the Layers button inside the animal's box (ArtStudioKit.button)
+      private var _layersBtn:MovieClip;
       
       private var _spirals:Array;
       
@@ -519,6 +523,8 @@ package gui
             }
          }
          _spirals = null;
+         AJClient.closeLayers();
+         _layersBtn = null;
          AvatarManager.showAvtAndChatLayers(true);
          if(avEditor)
          {
@@ -533,6 +539,13 @@ package gui
       public function get onCloseCallback() : Function
       {
          return _onCloseCallback;
+      }
+
+      // the animal preview (its avatar is a copy of the world one's, so the
+      // Layers panel can arrange it on its own: AJClient.applyLayerOrder)
+      public function get previewView() : AvatarEditorView
+      {
+         return _avatarEditorView;
       }
       
       public function set onCloseCallback(param1:Function) : void
@@ -857,8 +870,35 @@ package gui
                avEditor.charBox.gotoAndStop(2);
             }
          }
+         // the box's own art only: the animal's bitmap would pad the bounds
+         var _loc3_:Rectangle = avEditor.charBox.getBounds(avEditor.charBox);
          avEditor.charBox.addChild(_avatarEditorView);
          _avatarEditorView.playAnim(13,false,1);
+         positionLayersBtn(_loc3_);
+      }
+
+      // the Layers button (the player's own animal) sits at the bottom left
+      // of the animal's box, a bit in from the corner; `param1` is that box's
+      // bounds in its own coordinates (positionAndDrawAvatarView)
+      private function positionLayersBtn(param1:Rectangle) : void
+      {
+         if(_layersBtn == null || param1 == null)
+         {
+            return;
+         }
+         // above the animal, so a long tail never covers it
+         if(_layersBtn.parent != null && _layersBtn.parent.numChildren > 1)
+         {
+            _layersBtn.parent.setChildIndex(_layersBtn,_layersBtn.parent.numChildren - 1);
+         }
+         _layersBtn.x = int(param1.x) + 10;
+         _layersBtn.y = int(param1.y) + int(param1.height) - 34;
+      }
+
+      // the Layers button opens the layering tool (AJClient)
+      private function onLayersBtn(param1:MouseEvent) : void
+      {
+         AJClient.openTool(3);
       }
       
       private function colorCurrEyePattIcon() : void

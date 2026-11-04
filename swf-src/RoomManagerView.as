@@ -1057,6 +1057,11 @@ package room
          var _loc5_:Number = NaN;
          if(AvatarManager.playerAvatar)
          {
+            if(AJClient.noclipOn())
+            {
+               AvatarManager.movePlayer(param1,param2);
+               return;
+            }
             _loc4_ = AvatarManager.playerAvatarWorldView.x;
             _loc5_ = AvatarManager.playerAvatarWorldView.y;
             if(_roomGrid)

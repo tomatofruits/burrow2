@@ -172,6 +172,23 @@ package gui
             "labelLabel":"Item Maker",
             "btnLabel":"Open"
          },{
+            // what the animal holds, from defPack 1036 (lib/holdables.js): a
+            // grid of pictures to pick from, each held in a room
+            "type":TOGGLE_TYPE_JOIN,
+            "frame":"holdables",
+            "iconFrame":"redeemCode",
+            "labelLabel":"Holdables",
+            "btnLabel":"Choose"
+         },{
+            // walking to a click through walls (AJClient.noclipOn), or around
+            // them as the room's grid says
+            "type":TOGGLE_TYPE_TOGGLE_BTN,
+            "frame":"noclip",
+            "iconFrame":"world",
+            "labelLabel":"Noclip",
+            "onLabel":"On",
+            "offLabel":"Off"
+         },{
             "type":TOGGLE_TYPE_JOIN,
             "frame":"chatFilter",
             "iconFrame":"buddyRequest",
@@ -346,6 +363,19 @@ package gui
             "labelTxt":36824,
             "btnTxt":36825
          }];
+         // the Staff tag, for staff only (lib/roles.js): the game's "Host"
+         // tag under the name, saying Staff, put on and off here.
+         if(AJClient.staffRole != "")
+         {
+            _loc4_.unshift({
+               "type":TOGGLE_TYPE_TOGGLE_BTN,
+               "frame":"staffTag",
+               "iconFrame":"nameBadge",
+               "labelLabel":"Staff Tag",
+               "onLabel":"Shown",
+               "offLabel":"Hidden"
+            });
+         }
          if(gMainFrame.clientInfo.userEmail == null || gMainFrame.clientInfo.userEmail == "")
          {
             _loc4_.splice(3,0,{

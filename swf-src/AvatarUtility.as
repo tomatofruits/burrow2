@@ -9,6 +9,7 @@ package avatar
    import gui.GuiManager;
    import item.EquippedAvatars;
    import item.Item;
+   import avatar.AvatarManager;
    import item.ItemXtCommManager;
    
    public class AvatarUtility
@@ -397,40 +398,94 @@ package avatar
          }
       }
       
-      public static function layerArrayForItemsAndColors(param1:AccItemCollection, param2:Array, param3:int, param4:int, param5:Boolean = false) : Array
+      public static function layerArrayForItemsAndColors(param1:AccItemCollection, param2:Array, param3:int, param4:int, param5:Boolean = false, param6:String = "") : Array
       {
          var _loc7_:Object = null;
          var _loc6_:* = 0;
          var _loc8_:Array = [];
+         // kept (arranged) order for the animal being drawn, if any:
+         // bottom-first ranks. the player's own lives in AJClient.layersKept,
+         // keyed by its owner's name and the animal's id (other players'
+         // animals number theirs from one as well, so the name keeps the
+         // pairs apart); it survives the avatar being re-created from room
+         // to room, and nothing here waits for any avatar object to exist.
+         // anything else in the collection: in-use items in order. if their
+         // invIdx sequence is not ascending, that order is the kept one.
+         var _loc10_:Array = null;
+         try { _loc10_ = AJClient.layersKept[String(param6).toLowerCase() + ":" + int(param3)]; } catch(e:Error) { _loc10_ = null; }
+         if(_loc10_ == null && param1 != null)
+         {
+            // derive arrangement from the passed collection: in-use items in order.
+            // if their invIdx sequence is not ascending, that order is the kept one.
+            var _loc12_:Array = [];
+            for each(var _loc13_:Item in param1.getCoreArray())
+            {
+               if(_loc13_.getInUse(param3))
+               {
+                  _loc12_.push(_loc13_.invIdx);
+               }
+            }
+            if(_loc12_.length >= 2)
+            {
+               var _loc14_:Boolean = false;
+               var _loc15_:int = 0;
+               while(_loc15_ < _loc12_.length - 1)
+               {
+                  if(int(_loc12_[_loc15_]) > int(_loc12_[_loc15_ + 1]))
+                  {
+                     _loc14_ = true;
+                     break;
+                  }
+                  _loc15_++;
+               }
+               if(_loc14_)
+               {
+                  _loc10_ = _loc12_.concat();
+               }
+            }
+         }
          if(param1)
          {
-            for each(var _loc9_:Item in param1.getCoreArray())
+            for each(var _loc9b_:Item in param1.getCoreArray())
             {
-               if((_loc9_.layerId <= 3 || (param5 || _loc9_.enviroType == param4 || _loc9_.isLandAndOcean)) && _loc9_.getInUse(param3))
+               if((_loc9b_.layerId <= 3 || (param5 || _loc9b_.enviroType == param4 || _loc9b_.isLandAndOcean)) && _loc9b_.getInUse(param3))
                {
-                  if(_loc9_.layerId == 1)
+                  if(_loc9b_.layerId == 1)
                   {
                      _loc6_ = uint(param2[0]);
                   }
-                  else if(_loc9_.layerId == 2)
+                  else if(_loc9b_.layerId == 2)
                   {
                      _loc6_ = uint(param2[1]);
                   }
-                  else if(_loc9_.layerId == 3)
+                  else if(_loc9b_.layerId == 3)
                   {
                      _loc6_ = uint(param2[2]);
                   }
                   else
                   {
-                     _loc6_ = _loc9_.color;
+                     _loc6_ = _loc9b_.color;
                   }
-                  // "d": the item, for a custom one's own picture (LayerAnim, LayerBitmap)
-                  _loc7_ = {
-                     "l":_loc9_.accId,
-                     "c":_loc6_,
-                     "d":_loc9_.defId
-                  };
-                  _loc8_.push(_loc7_);
+                  var _loc24_:Object = {"l":_loc9b_.accId,"c":_loc6_,"d":_loc9b_.defId};
+                  if(_loc10_ != null && _loc9b_.layerId >= 4)
+                  {
+                     // the Layers panel's order (AJClient): the item's place in
+                     // it, bottom first, as a slot number in the free range the
+                     // bitmap paints after the game's own (LayerBitmap.paint).
+                     // the body's own layers (layerId under 4) are never moved.
+                     var _loc17_:Object = {};
+                     var _loc18_:int = 0;
+                     while(_loc18_ < _loc10_.length)
+                     {
+                        _loc17_[int(_loc10_[_loc18_])] = _loc18_;
+                        _loc18_++;
+                     }
+                     if(_loc17_.hasOwnProperty(_loc9b_.invIdx))
+                     {
+                        _loc24_["s"] = 31 + int(_loc17_[_loc9b_.invIdx]);
+                     }
+                  }
+                  _loc8_.push(_loc24_);
                }
             }
          }

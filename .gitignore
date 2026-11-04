@@ -4,17 +4,30 @@
 # assets mirrored from the official CDN
 /cache/
 
-# decompiler
+# decompiler and its output
 tools/ffdec/
+/ffdec-out/
+tools/hud/
 tools/hud/hud.xml
 tools/hud/hud.pickle
 tools/hud/__pycache__/
 
+# local settings and secrets (the server reads these from its environment)
+.env
+.env.*
+!.env.example
+
 node_modules/
 *.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
 tools/recorder.js
 SITE.md
-
+tmp-*
+*.bak
+*.orig
 
 __pycache__/
 

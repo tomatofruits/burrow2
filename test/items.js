@@ -23,6 +23,7 @@ const TOWNSHIP = "jamaa_township.room_main#1";
 const ODD_CLOTHING_SHOP = 666;
 const ODD_DEN_SHOP = 396;
 const {postJson} = harness;
+const playeritems = require("../lib/playeritems.js");
 
 // the authenticator app's side of 2FA (lib/totp.js), as in test/staff.js.
 const STEP = 30;
@@ -243,6 +244,20 @@ const first = async () => {
   assert.strictEqual((await shopList(pat.client, pat.roomId, ODD_DEN_SHOP))[0], "50000");
   assert.strictEqual(byId(await pack(1030), 50000).abbrName, "BeanBagChair");
 
+  // its icon in the game: the client's DenItemHelper asks the file
+  // items/<def id << 16 | icon id> of every den item without a picture of
+  // its own — of a custom id the official CDN has no file, so without what
+  // the server does here the item went without a picture in the inventory.
+  // The base's file goes out in its place (lib/http.js).
+  const itemPreview = require("../lib/itempreview.js");
+  const denRows = await pack(1030); // after the custom row is in, for the base's sort category
+  const iconOf = type => `${cdn.hashedPath(`items/${(type << 16 | itemPreview.iconId(Number(byId(denRows, 1).sortCat))) >>> 0}`)}`;
+  const baseIcon = await fetch(`${BASE}/${iconOf(1)}`);
+  assert.strictEqual(baseIcon.status, 200, "the bean bag chair's icon file");
+  const chairIcon = await fetch(`${BASE}/${iconOf(50000)}`);
+  assert.strictEqual(chairIcon.status, 200, "the custom chair's icon file");
+  assert.deepStrictEqual(Buffer.from(await chairIcon.arrayBuffer()), Buffer.from(await baseIcon.arrayBuffer()));
+
   // the item finder has them
   const found = await (await fetch(`${BASE}/api/search?kind=all&q=50000`)).json();
   assert.deepStrictEqual(found.results.filter(entry => entry.id === 50000).map(entry => `${entry.kind} ${entry.name}`).sort(), ["clothing Test Crown", "den Test Chair"]);
@@ -262,6 +277,18 @@ const first = async () => {
     atLogin = await untilDefs(client, "clothing");
   });
   assert.deepStrictEqual(atLogin.map(entry => entry.name), ["Gold Crown"]);
+  // the Staff tag (lib/roles.js): a staff member's own user var, put in the
+  // name bar data where the game draws the "Host" tag; a player's attempt to
+  // set it is refused
+  devGame.client.xt("zs", devGame.roomId, 9011, 1, 1);
+  assert.deepStrictEqual((await devGame.client.nextXt("zs")).slice(2, 4), ["9011", "1"]);
+  assert.ok((Number((await devGame.client.nextXt("an"))[3]) & (1 << 17)) !== 0, "a staff member wears the Staff tag");
+  pat.client.xt("zs", pat.roomId, 9011, 1, 1);
+  pat.client.xt("ag", pat.roomId, "Pat");
+  assert.strictEqual(Number((await pat.client.untilXt("ag"))[10]) & (1 << 17), 0, "a player cannot wear the Staff tag");
+  devGame.client.xt("zs", devGame.roomId, 9011, 0, 1);
+  assert.deepStrictEqual((await devGame.client.nextXt("zs")).slice(2, 4), ["9011", "0"]);
+  assert.strictEqual(Number((await devGame.client.nextXt("an"))[3]) & (1 << 17), 0, "the Staff tag goes away");
   say(devGame.client, devGame.roomId, `!item clothing ${base.id} Quick Hat`);
   assert.strictEqual(await nextBox(devGame.client), "Made Quick Hat, clothing 50001. It is in the item finder now.");
   assert.strictEqual((await untilDefs(pat.client, "clothing"))[0].name, "Quick Hat");
@@ -347,15 +374,15 @@ const first = async () => {
   assert.strictEqual((await dev("/mod/api/items")).data.items.length, 3);
 
   // --- a player's own items (lib/playeritems.js, the client's Item Maker):
-  // free, given to them, found by them only, at most five a day
+  // free, given to them, found by them only
   const maker = async (...params) => {
     pat.client.xt("xcm", pat.roomId, ...params);
     const answer = await pat.client.untilXt("xcm");
     return {ok: answer[2] === "1", said: answer[3], today: Number(answer[4]), inAll: Number(answer[5]), mine: JSON.parse(answer[6])};
   };
-  assert.deepStrictEqual(await maker("info"), {ok: true, said: "", today: 5, inAll: 20, mine: []});
+  assert.deepStrictEqual(await maker("info"), {ok: true, said: "", today: playeritems.PER_DAY, inAll: playeritems.IN_ALL, mine: []});
   const own = await maker("make", "clothing", base.id, "Pat Hat");
-  assert.deepStrictEqual([own.ok, own.said, own.today, own.inAll], [true, "Made Pat Hat. It is in your clothing now.", 4, 19]);
+  assert.deepStrictEqual([own.ok, own.said, own.today, own.inAll], [true, "Made Pat Hat. It is in your clothing now.", playeritems.PER_DAY - 1, playeritems.IN_ALL - 1]);
   const patHat = own.mine[0];
   assert.deepStrictEqual([patHat.kind, patHat.name, patHat.base], ["clothing", "Pat Hat", Number(base.id)]);
   assert.ok((await searchAs(patHat.id, patAs)).some(entry => entry.id === patHat.id));
@@ -368,11 +395,8 @@ const first = async () => {
   // the base list offers only what can be copied
   assert.ok(!(await (await fetch(`${BASE}/api/search?base=1&kind=clothing&q=${bodyPart.id}`)).json()).results.some(entry => entry.id === bodyPart.id));
   for (let count = 2; count <= 5; count++) {
-    assert.ok((await maker("make", "den", 1, `Pat Chair ${count}`)).ok);
+    assert.ok((await maker("make", "den", 1, `Pat Chair ${count}`)).ok, `chair ${count}`);
   }
-  const full = await maker("make", "den", 1, "One Too Many");
-  assert.deepStrictEqual([full.ok, full.today], [false, 0]);
-  assert.match(full.said, /made 5 items today/);
   // --- its own picture (lib/itemart.js): checked and cleaned, served, and
   // every game told; only by its maker or staff who make items
   const crc32 = buf => {
@@ -400,6 +424,9 @@ const first = async () => {
     ihdr[8] = 8;
     ihdr[9] = 2;
     const raw = Buffer.alloc((side * 3 + 1) * side, 0x7F);
+    for (let row = 0; row < side; row++) {
+      raw[row * (side * 3 + 1)] = 0; // every row's filter byte: none at all
+    }
     return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), chunk("IHDR", ihdr), ...extra,
       chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
   };
@@ -458,7 +485,7 @@ const first = async () => {
   assert.match((await upload(pat, hatEntry, bmp)).ok, /new picture/);
   const bmpArt = (await maker("info")).mine.find(entry => entry.kind === hatEntry.kind && entry.id === hatEntry.id).art;
   assert.strictEqual((await fetch(`${BASE}/itemart/clothing/${hatEntry.id}.png?v=${bmpArt}`)).headers.get("content-type"), "image/png");
-  assert.match((await upload(pat, hatEntry, png(600))).error, /512 pixels/);
+  assert.match((await upload(pat, hatEntry, png(600))).error, /256 pixels/);
   assert.match((await upload(hal, hatEntry, png(16))).error, /not one of your items/);
   assert.match((await fetch(`${BASE}/api/itemart?kind=clothing&id=${hatEntry.id}`, {method: "POST", body: png(16)}).then(r => r.json())).error, /Sign in/);
   // a JPEG keeps its picture and loses its EXIF (where a photo was taken)
@@ -481,6 +508,79 @@ const first = async () => {
   const wornAs = await maker("info");
   assert.strictEqual(wornAs.mine.find(entry => entry.kind === "clothing" && entry.id === hatEntry.id).artMode, "texture");
   assert.match((await maker("look", "clothing", hatEntry.id, "melted")).said, /sticker or texture/);
+
+  // --- a den item's picture: told to no game as art (the clients put a den
+  // item's picture on only out of its item file — art sent along has the
+  // client add a bitmap object its own icon code throws over), but the
+  // item's files, by its icon and by its category in a den, are the picture
+  // built up as an item file and wrapped like the game's own ({ba, so}:
+  // lib/itemart.swf, lib/http.js)
+  const amf3 = require("../lib/amf3.js");
+  const chairEntry = (await maker("info")).mine.find(entry => entry.kind === "den" && entry.name === "Pat Chair 2");
+  assert.ok(chairEntry, "the custom chair to give a picture");
+  assert.match((await upload(pat, chairEntry, png(24))).ok, /new picture/);
+  // ...but the game is sent no art for a den item, so its own icon code
+  // runs and centres the picture; its def row carries the picture's version,
+  // which the client puts in the file's name (swf-src/DenItemHelper.as)
+  const denTold = (await untilDefs(pat.client, "den")).find(row => row.id === String(chairEntry.id));
+  assert.strictEqual(denTold.art, "");
+  // the maker's list carries the picture's version in full
+  const chairPictured = (await maker("info")).mine.find(entry => entry.kind === "den" && entry.id === chairEntry.id);
+  assert.match(chairPictured.art, /^p[0-9a-f]{12}$/);
+  assert.strictEqual(denTold.artVersion, chairPictured.art);
+  // the item's file: the picture as an SWF item file in an AMF wrapper
+  const chairFileAt = low => `${cdn.hashedPath(`items/${(Number(chairEntry.id) << 16 | low) >>> 0}`)}`;
+  const wrapped = await fetch(`${BASE}/${chairFileAt(itemPreview.iconId(Number(byId(denRows, 1).sortCat)))}`);
+  assert.strictEqual(wrapped.status, 200, "the custom chair's own item file");
+  assert.strictEqual(wrapped.headers.get("content-type"), "application/octet-stream");
+  const itemFile = amf3.decode(Buffer.from(await wrapped.arrayBuffer()));
+  assert.deepStrictEqual(Object.keys(itemFile).sort(), ["ba", "so"], "what the game's item files carry");
+  assert.strictEqual(itemFile.so, 0);
+  const file = Buffer.from(itemFile.ba);
+  assert.deepStrictEqual([...file.subarray(0, 3)], [70, 87, 83], "the wrapped bytes are an SWF"); // FWS
+  assert.strictEqual(file[3], 9, "an SWF of version 9, as the game's item files are");
+  // its tags: FileAttributes, a background, the bitmap, the shape filled
+  // with it, the sprite about the shape, the sprite on the stage, the frame
+  // and the end
+  const rectBytes = at2 => {
+    const nBits = (file[at2] >>> 3) & 31;
+    return Math.ceil((5 + nBits * 4) / 8);
+  };
+  const stageBits = rectBytes(8);
+  assert.ok(stageBits <= 31, "a sane stage rect");
+  let at = 8 + stageBits + 4;
+  const codes = [];
+  while (at + 2 <= file.length) {
+    const head = file.readUInt16LE(at);
+    const long = (head & 63) === 63;
+    codes.push(head >>> 6);
+    at += (long ? 6 : 2) + (long ? file.readUInt32LE(at + 2) : head & 63);
+  }
+  assert.deepStrictEqual(codes, [69, 9, 36, 2, 39, 26, 1, 0]);
+  // the stage is the picture fitted to stand in, never wider than the item's
+  // place in a den: 160 (the rect's fields are packed as bits)
+  const readBits = (from, count) => {
+    let out = 0;
+    for (let i = 0; i < count; i++) {
+      out = out * 2 + ((file[(from + i) >> 3] >> (7 - ((from + i) & 7))) & 1);
+    }
+    return out;
+  };
+  const stageWide = readBits(8 * 8 + 5 + stageBits, stageBits) / 20;
+  assert.ok(stageWide > 0 && stageWide <= 160, `the stage is fitted to the item's place (${stageWide} pixels)`);
+  // and by the categories the item may stand in a den by, the same
+  for (const low of [1, 2, 3]) {
+    assert.strictEqual((await fetch(`${BASE}/${chairFileAt(low)}`)).status, 200, `the chair's file at ${low}`);
+    // the name the client asks for once it knows the picture's version
+    const pictured = `${cdn.hashedPath(`items/${(((Number(chairEntry.id) << 16 | low) >>> 0) + "~" + chairPictured.art)}`)}`;
+    const named = await fetch(`${BASE}/${pictured}`);
+    assert.strictEqual(named.status, 200, `the chair's picture file name at ${low}`);
+    const namedFile = amf3.decode(Buffer.from(await named.arrayBuffer()));
+    assert.strictEqual(Buffer.from(namedFile.ba).length, file.length, "the same picture's file, under its versioned name");
+  }
+  assert.match((await upload(pat, chairEntry, Buffer.alloc(0), "&remove=1")).ok, /taken away/);
+  assert.strictEqual((await fetch(`${BASE}/${chairFileAt(itemPreview.iconId(Number(byId(denRows, 1).sortCat)))}`)).status, 200,
+    "without a picture of its own, the base's file again");
 
   // --- animal wear rules: a live custom item keeps its xdi-only name and
   // picture, existing use is removed, and neither packet nor saved-outfit
@@ -534,7 +634,7 @@ const first = async () => {
 
   // deleting: their own only, and gone from everyone
   assert.match((await maker("delete", "clothing", 50001)).said, /not one of your items/);
-  for (const entry of full.mine) {
+  for (const entry of (await maker("info")).mine) {
     assert.match((await maker("delete", entry.kind, entry.id)).said, /^Deleted /);
   }
   assert.deepStrictEqual((await maker("info")).mine, []);
@@ -556,6 +656,27 @@ const first = async () => {
     [true, true, ["Waiting Hat item Pat"]]);
   assert.strictEqual((await dev("/mod/api/review")).status, 403); // a developer approves nothing
   assert.match((await admin("/admin/api/review", {kind: "clothing", id: waitingHat.id, approve: true})).data.ok, /in the game, and Pat has one/);
+  // and its maker has a Jam-A-Gram from Animal Jam HQ about it (lib/playeritems.js)
+  const findXt = async (client, cmd) => {
+    for (let waited = 0; waited < 5000; waited += 20) {
+      const at = client.queue.findIndex(text => text.split("%").slice(2, -1)[0] === cmd);
+      if (at !== -1) {
+        return client.queue.splice(at, 1)[0].split("%").slice(2, -1);
+      }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(`no ${cmd} from the server`);
+  };
+  const gramCards = async () => {
+    pat.client.xt("el", pat.roomId, 0);
+    const list = await findXt(pat.client, "el");
+    const cards = [];
+    for (let at = 3; at + 17 <= list.length; at += 17) {
+      cards.push(list.slice(at, at + 17));
+    }
+    return cards;
+  };
+  assert.ok((await gramCards()).some(card => /Your Waiting Hat has been approved/.test(card[5])), "an item's maker hears of its approval");
   for (;;) {
     const changed = await pat.client.untilXt("il");
     if (changed[2] === "2" && changed[10] === String(waitingHat.id)) { // given to Pat
@@ -581,6 +702,7 @@ const first = async () => {
   assert.match((await admin("/admin/api/review", {action: "uploads", username: "Pat", blocked: false})).data.ok, /Pat can upload pictures again/);
   assert.match((await upload(pat, waitingHat, png(23))).ok, /waiting/);
   assert.match((await admin("/admin/api/review", {kind: "clothing", id: waitingHat.id, approve: true})).data.ok, /shown now/);
+  assert.ok((await gramCards()).some(card => /Your new picture for Waiting Hat has been approved/.test(card[5])), "a new picture's maker hears of its approval");
   // off: nothing is made
   assert.strictEqual((await admin("/admin/api/item-switches", {enabled: false, approval: false})).status, 200);
   assert.match((await maker("make", "clothing", base.id, "No Hat")).said, /turned off/);
@@ -609,6 +731,21 @@ const first = async () => {
     assert.ok(log.includes(line), `missing from the log: ${line}\n${log.join("\n")}`);
   }
   made = {base, restrictedId: 50000};
+  // a role without 2FA (the owner's own case): no staff powers, but the
+  // cosmetic Staff tag is still offered
+  assert.match((await admin("/admin/api/account", {username: "Lou", action: "role", role: "helper"})).data.ok, /helper/);
+  let louStaff = null;
+  const lou = await arrive("Lou", people.Lou, null, async client => {
+    louStaff = await client.untilXt("xsp");
+  });
+  assert.deepStrictEqual([louStaff[2], louStaff[3]], ["helper", ""]);
+  lou.client.xt("zs", lou.roomId, 9011, 1, 1);
+  assert.deepStrictEqual((await lou.client.nextXt("zs")).slice(2, 4), ["9011", "1"]);
+  assert.ok((Number((await lou.client.nextXt("an"))[3]) & (1 << 17)) !== 0, "a role without 2FA can wear the Staff tag");
+  lou.client.xt("zs", lou.roomId, 9011, 0, 1);
+  await lou.client.nextXt("zs");
+  await lou.client.nextXt("an");
+  lou.client.socket.destroy();
   for (const {client} of [pat, devGame, hal]) {
     client.socket.destroy();
   }
@@ -618,9 +755,27 @@ const first = async () => {
 const second = async () => {
   const atLogin = {};
   const lou = await arrive("Lou", people.Lou, null, async client => {
+    atLogin.holdables = await client.untilXt("xhd");
     atLogin.clothing = await untilDefs(client, "clothing");
     atLogin.den = await untilDefs(client, "den");
   });
+  // the holdables of defPack 1036, and a pick of one (lib/holdables.js)
+  assert.deepStrictEqual(atLogin.holdables.slice(2, 5), ["1", "35", "Popcorn"]);
+  lou.client.xt("zs", lou.roomId, 9012, 1, 1);
+  assert.deepStrictEqual((await lou.client.nextXt("zs")).slice(2, 4), ["9012", "1"]);
+  // entering a room again replays it as the attachment message ("uc" type 4)
+  lou.client.xt("rj", 1, "sarepia.room_main#1", 1, 0, 0);
+  const heldRoom = await lou.client.untilXt("rj");
+  await lou.client.untilXt("rp");
+  lou.client.xt("au", heldRoom[4], 1, 400, 400, 14, 1);
+  let held = null;
+  for (let n = 0; n < 6 && held == null; n++) {
+    const msg = await lou.client.untilXt("uc");
+    if (msg[4] === "4") {
+      held = msg;
+    }
+  }
+  assert.ok(held && held[3] === "35,", JSON.stringify(held));
   assert.deepStrictEqual(atLogin.clothing.map(entry => `${entry.id} ${entry.name}`), ["50000 Gold Crown", "50001 Quick Hat"]);
   assert.deepStrictEqual(atLogin.den.map(entry => entry.name), ["Test Chair"]);
   assert.strictEqual(byId(await pack(1000), 50001).layerDefId, made.base.layerDefId);
@@ -629,6 +784,23 @@ const second = async () => {
   assert.strictEqual((await strings())[9100001], "Quick Hat");
   const shop = await shopList(lou.client, lou.roomId, ODD_CLOTHING_SHOP);
   assert.ok(shop.includes("50001") && !shop.includes("50000"));
+  // a holdable with variants: the smoothie's colour travels with the choice
+  lou.client.xt("zs", heldRoom[4], 9012, 2, 1);
+  await lou.client.nextXt("zs");
+  lou.client.xt("zs", heldRoom[4], 9014, 1, 1);
+  assert.deepStrictEqual((await lou.client.nextXt("zs")).slice(2, 4), ["9014", "1"]);
+  lou.client.xt("rj", 1, TOWNSHIP, 1, 0, 0);
+  const backRoom = await lou.client.untilXt("rj");
+  await lou.client.untilXt("rp");
+  lou.client.xt("au", backRoom[4], 1, 400, 400, 14, 1);
+  let smoothie = null;
+  for (let n = 0; n < 6 && smoothie == null; n++) {
+    const msg = await lou.client.untilXt("uc");
+    if (msg[4] === "4") {
+      smoothie = msg;
+    }
+  }
+  assert.ok(smoothie && smoothie[3] === "36,orange", JSON.stringify(smoothie));
   lou.client.socket.destroy();
 };
 

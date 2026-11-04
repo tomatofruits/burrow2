@@ -28,6 +28,12 @@ package loader
       private var _defId:int;
       
       private var _id:uint;
+
+      // the item file asked for: `_id`, plus the picture's version when the
+      // item has one (AJClient.customArtVersion), so a file fetched before a
+      // picture changed is not taken for the changed one. the server answers
+      // both names with the item's file (lib/http.js, baseFilesFor).
+      private var _fileId:String;
       
       private var _callback:Function;
       
@@ -238,6 +244,15 @@ package loader
          return 0;
       }
       
+      // the name of the file to ask for: the item file id, and the picture's
+      // version after a "~" when it has one, so a game that has the old
+      // picture's file asks for a name it has not seen
+      private function fileIdOf(param1:uint) : String
+      {
+         var _loc2_:String = AJClient.customArtVersion("den",_defId);
+         return _loc2_ == "" ? String(param1) : param1 + "~" + _loc2_;
+      }
+      
       public function get currDenItem() : DenItem
       {
          return _denItem;
@@ -248,6 +263,7 @@ package loader
          _denItem = param1;
          _defId = param1.defId;
          _id = uint(_defId << 16 | DenItem.getIconId(param1.sortId));
+         _fileId = fileIdOf(_id);
          _callback = param2;
          _minigameDefId = param1.minigameDefId;
          _nameStrId = param5;
@@ -272,7 +288,7 @@ package loader
             return;
          }
          DenItemServer.instance.addEventListener("OnNewData",handleData,false,0,true);
-         DenItemServer.instance.requestFile(_id);
+         DenItemServer.instance.requestFile(_fileId);
       }
       
       public function initDS(param1:DenStateItem, param2:Function) : void
@@ -280,6 +296,7 @@ package loader
          _denStateItem = param1;
          _defId = param1.defId;
          _id = uint(_defId << 16 | param1.catId);
+         _fileId = fileIdOf(_id);
          _callback = param2;
          _minigameDefId = param1.minigameDefId;
          _nameStrId = param1.nameStrId;
@@ -304,13 +321,14 @@ package loader
             return;
          }
          DenItemServer.instance.addEventListener("OnNewData",handleData,false,0,true);
-         DenItemServer.instance.requestFile(_id);
+         DenItemServer.instance.requestFile(_fileId);
       }
       
       public function initGeneric(param1:DenItemDef, param2:Function, param3:int = 0, param4:int = 0, param5:int = 0, param6:String = "", param7:int = -1, param8:String = "", param9:PetItem = null, param10:MannequinData = null) : void
       {
          _defId = param1.id;
          _id = uint(_defId << 16 | DenItem.getIconId(param1.sortCat));
+         _fileId = fileIdOf(_id);
          _callback = param2;
          _minigameDefId = param1.gameDefId;
          _nameStrId = param5;
@@ -335,7 +353,7 @@ package loader
             return;
          }
          DenItemServer.instance.addEventListener("OnNewData",handleData,false,0,true);
-         DenItemServer.instance.requestFile(_id);
+         DenItemServer.instance.requestFile(_fileId);
       }
       
       public function destroy() : void
@@ -474,7 +492,10 @@ package loader
             else if(_loader.content.hasOwnProperty("pet"))
             {
                _loc5_ = MovieClip(_loader.content);
-               PetManager.setPetState(_loc5_,_version,_version2,_version3);
+               if(_loc5_.pet != null)
+      {
+         PetManager.setPetState(_loc5_,_version,_version2,_version3);
+      }
                if(_petItem && _petItem.isEgg)
                {
                   if(_loc5_.pet.hasOwnProperty("setEggDayInt"))
@@ -567,7 +588,7 @@ package loader
       private function handleData(param1:FileServerEvent) : void
       {
          var _loc2_:Object = null;
-         if(param1.id == _id && param1.success)
+         if(param1.id == _fileId && param1.success)
          {
             DenItemServer.instance.removeEventListener("OnNewData",handleData);
             _loader.contentLoaderInfo.addEventListener("complete",onBytesLoaded);
@@ -618,7 +639,10 @@ package loader
          else if(_loader.content.hasOwnProperty("pet"))
          {
             _loc3_ = MovieClip(_loader.content);
-            PetManager.setPetState(_loc3_,_version,_version2,_version3);
+            if(_loc3_.pet != null)
+      {
+         PetManager.setPetState(_loc3_,_version,_version2,_version3);
+      }
             if(_petItem && _petItem.isEgg)
             {
                if(_loc3_.pet.hasOwnProperty("setEggDayInt"))

@@ -36,7 +36,7 @@ class GameClient {
         while ((end = this.buffer.indexOf(0)) !== -1) {
           this.queue.push(this.buffer.toString("utf8", 0, end));
           if (process.env.AJ_TEST_TRACE) {
-            console.log(`<- ${this.queue[this.queue.length - 1].slice(0, 300)}`);
+            console.log(`<-${this.socket.localPort} ${this.queue[this.queue.length - 1].slice(0, 300)}`);
           }
           this.buffer = this.buffer.subarray(end + 1);
         }
@@ -107,7 +107,11 @@ class GameClient {
       // the chat filter settings ("xfl", after every login), the one-time
       // question which filter to use ("xfa", on the first room) and the
       // buddy list with when each was last seen ("bl", "xls": at login) come unasked.
-      if ((fields[0] === "xfl" || fields[0] === "xfa" || fields[0] === "bl" || fields[0] === "xls") && cmd !== fields[0]) {
+      // so do the order clothes are drawn in ("xly", after a full item list),
+      // the emoji chart ("xes"), the Jamaa Journal's pages ("xjy") and the
+      // holdables list ("xhd").
+      if ((fields[0] === "xfl" || fields[0] === "xfa" || fields[0] === "bl" || fields[0] === "xls" || fields[0] === "xly"
+        || fields[0] === "xes" || fields[0] === "xjy" || fields[0] === "xhd") && cmd !== fields[0]) {
         continue;
       }
       if (this.unasked(fields)) {

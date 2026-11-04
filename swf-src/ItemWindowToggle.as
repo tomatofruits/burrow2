@@ -221,6 +221,7 @@ package gui.itemWindows
                break;
             case "itemFinder":
             case "itemMaker":
+            case "holdables":
             case "chatFilter":
             case "chatBubble":
             case "themeMenu":
@@ -239,6 +240,8 @@ package gui.itemWindows
             case "hideBlocked":
             case "customArt":
             case "wasd":
+            case "staffTag":
+            case "noclip":
                _window.toggleBtn.gotoAndStop("double");
                _window.toggleBtn.toggleBtn.gotoAndStop(ownSwitchOn() ? "startingOn" : "startingOff");
                setToggleLabels();
@@ -459,10 +462,14 @@ package gui.itemWindows
                return !blockedAreHidden();
             case "customArt":
                return AJClient.customArtOn();
+            case "staffTag":
+               return staffTagOn();
+            case "noclip":
+               return AJClient.noclipOn();
          }
          return false;
       }
-
+   
       private function setOwnSwitch(param1:Boolean) : void
       {
          switch(_currItem.frame)
@@ -475,7 +482,34 @@ package gui.itemWindows
                break;
             case "customArt":
                setCustomArt(param1);
+               break;
+            case "staffTag":
+               setStaffTag(param1);
+               break;
+            case "noclip":
+               setNoclip(param1);
          }
+      }
+   
+      // the Staff tag (lib/roles.js): user var 9011, which the server keeps
+      // and puts on the name bar of staff only
+      private function staffTagOn() : Boolean
+      {
+         return Number(gMainFrame.userInfo.userVarCache.getUserVarValueById(9011)) == 1;
+      }
+   
+      private function setStaffTag(param1:Boolean) : void
+      {
+         gMainFrame.userInfo.userVarCache.updateUserVar(9011,param1 ? 1 : 0);
+         AchievementXtCommManager.requestSetUserVar(9011,param1 ? 1 : 0);
+      }
+   
+      // Noclip: a click walks straight there through walls (AJClient.noclipOn,
+      // RoomManagerView.movePlayerToLocation), rather than around them
+      private function setNoclip(param1:Boolean) : void
+      {
+         gMainFrame.userInfo.userVarCache.updateUserVar(9013,param1 ? 1 : 0);
+         AchievementXtCommManager.requestSetUserVar(9013,param1 ? 1 : 0);
       }
 
       // the two choices either side of a switch: the game's strings, or
@@ -1480,6 +1514,8 @@ package gui.itemWindows
                case "wasd":
                case "hideBlocked":
                case "customArt":
+               case "staffTag":
+               case "noclip":
                   _loc7_ = !ownSwitchOn();
                   setOwnSwitch(_loc7_);
                   param1.currentTarget.toggleBtn.gotoAndPlay(_loc7_ ? "on" : "off");
@@ -1650,6 +1686,13 @@ package gui.itemWindows
                      _mySettingsCloseFunction(null);
                   }
                   AJClient.openTool(2);
+                  break;
+               case "holdables":
+                  if(_mySettingsCloseFunction != null)
+                  {
+                     _mySettingsCloseFunction(null);
+                  }
+                  AJClient.openHoldables();
                   break;
                case "chatFilter":
                   if(_mySettingsCloseFunction != null)

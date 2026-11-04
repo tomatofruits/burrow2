@@ -65,6 +65,7 @@ set -- \
   gui.TradeManager TradeManager.as \
   avatar.AvatarView AvatarView.as \
   avatar.AvatarWorldView AvatarWorldView.as \
+  avatar.NameBar NameBar.as \
   localization.LocalizationManager LocalizationManager.as \
   room.RoomManagerWorld RoomManagerWorld.as \
   gskinner.motion.GTween GTween.as \
@@ -103,6 +104,7 @@ set -- \
   pet.PetManager PetManager.as \
   adoptAPet.TierPathPopup TierPathPopup.as \
   pet.PetBase PetBase.as \
+  newspaper.NewspaperPopup NewspaperPopup.as \
   game.touchPool.TouchPool TouchPool.as \
   game.phantomsTreasure.PhantomsTreasure PhantomsTreasure.as \
   game.microSmoothie.MicroSmoothie MicroSmoothie.as \

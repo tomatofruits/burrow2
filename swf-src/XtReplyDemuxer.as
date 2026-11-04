@@ -125,9 +125,29 @@ package
             AJClient.onItemMaker(param1.obj);
             return;
          }
+         if(param1.obj[0] == "xly")
+         {
+            AJClient.onLayers(param1.obj);
+            return;
+         }
          if(param1.obj[0] == "xiv")
          {
             AJClient.onInvisible(param1.obj);
+            return;
+         }
+         if(param1.obj[0] == "xjy")
+         {
+            AJClient.onJournalPages(param1.obj);
+            return;
+         }
+         if(param1.obj[0] == "xes")
+         {
+            AJClient.onEmojis(param1.obj);
+            return;
+         }
+         if(param1.obj[0] == "xhd")
+         {
+            AJClient.onHoldables(param1.obj);
             return;
          }
          if(param1.obj[0] == "xmn")

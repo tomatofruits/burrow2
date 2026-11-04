@@ -217,7 +217,7 @@
             <label class="check" style="margin-top:12px"><input id="remember-device" type="checkbox"> Trust this device for 30 days</label>
           </div>
           <div class="captcha" id="captcha"></div>
-          <div class="row"><button class="primary" type="submit">Sign in</button><button id="client-sign-in" type="button">Sign in with the Burrow client</button></div>
+          <div class="row"><button class="primary" type="submit">Sign in</button><button id="client-sign-in" type="button">Sign in with the Hideout client</button></div>
         </form>
         <p class="status" id="gate-status" role="status"></p>
         <p class="hint" style="margin:10px 0 0">No account yet? <a href="/register">Create one</a> · <a href="/account/recover">Forgot password or 2FA?</a></p>
@@ -349,6 +349,28 @@
           <p class="status" id="my-items-status" role="status"></p>
         </section>
 
+        <section>
+          <h2>Picture pets</h2>
+          <p class="hint">A picture of your own, made into a pet for this account. Draw it facing forward with nothing behind it: the greater side becomes the pet's size in the game. Every picture pet waits for a moderator before it is yours, and it shows on a fresh load of the game.</p>
+          <div class="my-items" id="picture-pets"></div>
+          <p class="hint" id="no-picture-pets" hidden>You have not made a picture pet yet.</p>
+          <form id="pet-form">
+            <label for="pet-file">Picture</label>
+            <div class="row"><input id="pet-file" type="file" accept="image/*" required></div>
+            <label for="pet-name">Name</label>
+            <input id="pet-name" maxlength="30" autocomplete="off" required>
+            <label for="pet-kind">Where it lives</label>
+            <select id="pet-kind">
+              <option value="0">On land</option>
+              <option value="2">In the water</option>
+              <option value="1">Flying (land rooms)</option>
+              <option value="3">Flying (ocean rooms)</option>
+            </select>
+            <div class="row"><button class="primary" type="submit" id="pet-put">Put it in for approval</button></div>
+          </form>
+          <p class="status" id="pet-status" role="status"></p>
+        </section>
+
         <section class="kept" id="rename-section" hidden>
           <h2>Username rejected</h2>
           <form id="rename-form">
@@ -386,7 +408,7 @@
 
         <section id="chat-bubble">
           <h2>Chat bubble</h2>
-          <p>Choose how your spoken chat bubbles look for everyone using Burrow's current client.</p>
+          <p>Choose how your spoken chat bubbles look for everyone using Hideout's current client.</p>
           <form id="chat-style-form">
             <div class="gradient-editor">
               <div class="gradient-editor-head"><b>Gradient colours</b><button id="chat-stop-add" type="button">Add colour</button></div>
@@ -427,7 +449,7 @@
           <h2>Discord</h2>
           <p id="badges" hidden></p>
           <p id="discord-shown"></p>
-          <p class="hint" id="discord-about">Shown on your card in the game. Sign in to Discord to link your account; boosting Burrow's Discord server gives you the Server Booster badge while you boost.</p>
+          <p class="hint" id="discord-about">Shown on your card in the game. Sign in to Discord to link your account; boosting Hideout's Discord server gives you the Server Booster badge while you boost.</p>
           <div class="row"><button class="primary" id="discord-link" type="button">Link Discord</button>
             <button id="discord-remove" type="button">Unlink</button></div>
           <p class="status" id="discord-status" role="status"></p>
@@ -543,7 +565,7 @@
           <div id="feedback-sent"></div>
         </section>
       </div>
-      <p class="hint" style="text-align:center;margin:20px 0 0">Burrow is an unofficial fan project, not affiliated with WildWorks or Animal Jam. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
+      <p class="hint" style="text-align:center;margin:20px 0 0">Hideout is an unofficial fan project, not affiliated with WildWorks or Animal Jam. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
     </div>
 
     <script src="/captcha.js"></script>
@@ -920,6 +942,99 @@
         }
       };
 
+      // their own picture pets (lib/picturepets.js): a picture made into a pet,
+      // waiting for a moderator on the Review page before it is theirs.
+      const PET_KINDS = {0: "on land", 1: "flying in land rooms", 2: "in the water", 3: "flying in ocean rooms"};
+      const PET_SIDE = 256;
+      const petPicture = async file => {
+        let image = null;
+        try {
+          image = await createImageBitmap(file);
+        }
+        catch (err) {
+          return null;
+        }
+        const scale = Math.min(1, PET_SIDE / image.width, PET_SIDE / image.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        image.close();
+        // always a PNG: the server takes nothing else for a pet
+        return await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      };
+
+      const renderPicturePets = () => {
+        const pets = account.picturePets || [];
+        $("no-picture-pets").hidden = pets.length > 0;
+        $("picture-pets").replaceChildren(...pets.map(entry => {
+          const card = el("div", undefined, "my-item");
+          const art = el("div", undefined, "art");
+          const picture = el("img");
+          picture.src = `/account/api/picturepets?view=${entry.num}`;
+          picture.alt = "";
+          art.append(picture);
+          const body = el("div");
+          body.append(el("strong", entry.name),
+            el("span", ` · ${PET_KINDS[entry.type] || "on land"} · ${entry.state === "approved" ? "in your game" : "waiting for a moderator"}`, "hint"));
+          if (entry.state !== "approved") {
+            const take = el("button", "Take it back", "danger");
+            take.type = "button";
+            take.addEventListener("click", async () => {
+              if (!confirm(`Take back the picture pet "${entry.name}"?`)) {
+                return;
+              }
+              const result = await petSend(`?delete=${entry.num}`, null);
+              setStatus("pet-status", result.ok ? "Taken back." : result.error || "That did not work.", !result.ok);
+              if (result.ok) {
+                await load();
+              }
+            });
+            const row = el("div", undefined, "row");
+            row.append(take);
+            body.append(row);
+          }
+          card.append(art, body);
+          return card;
+        }));
+      };
+
+      const petSend = async (query, body) => {
+        try {
+          const response = await fetch(`/account/api/picturepets${query}`, {method: "POST", body: body || new Uint8Array(0)});
+          return await response.json().catch(() => ({error: "That did not work."}));
+        }
+        catch (err) {
+          return {error: "The server did not answer."};
+        }
+      };
+
+      $("pet-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const chosen = $("pet-file").files[0];
+        const name = $("pet-name").value.trim();
+        if (!chosen || !name) {
+          setStatus("pet-status", !chosen ? "Choose a picture first." : "Give the pet a name.", true);
+          return;
+        }
+        $("pet-put").disabled = true;
+        setStatus("pet-status", "Sending the picture...");
+        const picture = await petPicture(chosen);
+        if (!picture) {
+          $("pet-put").disabled = false;
+          setStatus("pet-status", "That picture could not be read. Try a PNG, JPEG or GIF.", true);
+          return;
+        }
+        const result = await petSend(`?name=${encodeURIComponent(name)}&type=${encodeURIComponent($("pet-kind").value)}`, picture);
+        $("pet-put").disabled = false;
+        setStatus("pet-status", result.ok ? "Waiting for a moderator on the Review page." : result.error || "That did not work.", !result.ok);
+        if (result.ok) {
+          $("pet-file").value = "";
+          $("pet-name").value = "";
+          await load();
+        }
+      });
+
       const render = () => {
         $("gate").hidden = true;
         $("page").hidden = false;
@@ -939,6 +1054,7 @@
           return;
         }
         renderMyItems();
+        renderPicturePets();
         $("lock-notice").hidden = !account.locked;
         if (!$("chat-style-form").contains(document.activeElement)) {
           fillChatStyle(account.chatStyle);
@@ -1156,15 +1272,15 @@
         }
       };
 
-      // "Sign in with the Burrow client" (lib/manage.js): the browser asks
-      // whether to open Burrow, which opens this page again signed in (in a
+      // "Sign in with the Hideout client" (lib/manage.js): the browser asks
+      // whether to open Hideout, which opens this page again signed in (in a
       // new tab: this one follows). once that has worked in this browser, the
       // page asks by itself each time it opens signed out.
       const CLIENT_KEY = "burrow-client-sign-in";
       const CLIENT_RESULTS = {
-        ok: "Burrow signed you in, but this browser did not keep it. Sign in with your password.",
+        ok: "Hideout signed you in, but this browser did not keep it. Sign in with your password.",
         expired: "That sign-in took too long. Try again.",
-        elsewhere: "Burrow opened the page in another browser than the one you started in. Start from this browser again, or sign in with your password.",
+        elsewhere: "Hideout opened the page in another browser than the one you started in. Start from this browser again, or sign in with your password.",
       };
       const clientResult = new URLSearchParams(location.search).get("client");
       const clientRemembered = () => {
@@ -1182,7 +1298,7 @@
           setStatus("gate-status", started.data.error || "That did not work.", true);
           return;
         }
-        setStatus("gate-status", "Opening Burrow… Allow it if your browser asks. Burrow must be logged in, or remember you.");
+        setStatus("gate-status", "Opening Hideout… Allow it if your browser asks. Hideout must be logged in, or remember you.");
         location.href = `burrow://account?n=${started.data.nonce}`;
         clearInterval(clientWait);
         const until = Date.now() + 120000;
@@ -1646,7 +1762,7 @@
         linked: "Discord linked.",
         cancelled: "Linking was cancelled.",
         expired: "That took too long, or was started in another browser. Try again.",
-        taken: "That Discord account is linked to another Burrow account.",
+        taken: "That Discord account is linked to another Hideout account.",
         discord: "Discord did not answer. Try again later.",
         off: "Linking Discord is not available right now.",
       };
@@ -1763,7 +1879,7 @@
           }
           const link = document.createElement("a");
           link.href = URL.createObjectURL(await response.blob());
-          link.download = `burrow-data-${account.username}.json`;
+          link.download = `hideout-data-${account.username}.json`;
           link.click();
           URL.revokeObjectURL(link.href);
           setStatus("export-status", "Downloaded.");

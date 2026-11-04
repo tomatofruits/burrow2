@@ -202,6 +202,7 @@
           <input id="confirm" name="confirm" type="password" autocomplete="new-password" required>
           <label for="email">Recovery email <span class="hint">Used only to recover your password or 2FA</span></label>
           <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+          <details style="margin-top:14px"><summary>Server rules</summary><pre id="register-rules" style="white-space:pre-wrap;max-height:240px;overflow:auto">Loading...</pre></details>
           <label class="agree"><input id="agreed" name="agreed" type="checkbox" required>
             <span>I am 18 or older, and old enough in my country to agree to this myself. I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
           <div class="captcha" id="captcha"></div>
@@ -217,7 +218,7 @@
       <div id="status" role="status"></div>
     </main>
     <footer>Already have an account? <a href="/account">Manage it</a></footer>
-    <footer>Burrow is an unofficial fan project, not affiliated with WildWorks or Animal Jam. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></footer>
+    <footer>Hideout is an unofficial fan project, not affiliated with WildWorks or Animal Jam. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></footer>
 
     <script src="/captcha.js"></script>
     <script>
@@ -248,6 +249,11 @@
       };
 
       const $ = id => document.getElementById(id);
+      fetch("/rules.txt").then(response => response.ok ? response.text() : "").then(text => {
+        $("register-rules").textContent = text || "The rules could not be loaded. Try again in a moment.";
+      }).catch(() => {
+        $("register-rules").textContent = "The rules could not be loaded. Try again in a moment.";
+      });
       const form = $("form");
       const check = window.captcha.mount($("captcha"), "signup");
       let chosen = null; // [id, file name, name]

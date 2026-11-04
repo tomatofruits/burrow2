@@ -255,6 +255,23 @@ const run = async () => {
   assert.strictEqual((await mine("act", {action: "feedback", kind: "rant", text: "x"}, ann)).status, 400);
 
   const admin = (await panel("setup", {password: "admin-password-1"})).cookie;
+  // the rules and the approval cards' words, edited in the dashboard
+  assert.strictEqual(typeof (await panel("rules", undefined, admin)).data.text, "string");
+  assert.strictEqual((await panel("rules", {text: "# Test rules\nBe kind."}, admin)).status, 200);
+  assert.strictEqual((await panel("rules", undefined, admin)).data.text, "# Test rules\nBe kind.");
+  assert.ok((await panel("approval-ecards", undefined, admin)).data.texts.item);
+  assert.strictEqual((await panel("approval-ecards", {item: "Approved: {name} in {where}"}, admin)).status, 200);
+  assert.strictEqual((await panel("approval-ecards", undefined, admin)).data.texts.item, "Approved: {name} in {where}");
+  // one item to every account, from HQ
+  const defpacks = require("../lib/defpacks.js");
+  await defpacks.init();
+  const giftAll = await panel("giftall", {kind: "clothing", id: String(defpacks.clothingIds()[0]), text: "For everyone"}, admin);
+  assert.strictEqual(giftAll.status, 200, JSON.stringify(giftAll.data));
+  assert.match(giftAll.data.ok, /sent to/);
+  // the dashboard's own API prefix goes through the same handler
+  const dashboardGift = await fetch(`${BASE}/dashboard/api/admin/giftall`, {method: "POST", headers: {"Content-Type": "application/json", Origin: BASE, Cookie: admin},
+    body: JSON.stringify({kind: "clothing", id: defpacks.clothingIds()[0], text: "From the dashboard"})});
+  assert.strictEqual(dashboardGift.status, 200, await dashboardGift.text());
   const waiting = (await panel("support?handled=0", undefined, admin)).data;
   assert.deepStrictEqual([waiting.open, waiting.names[0].newName, waiting.names[0].reason, waiting.feedback[0].text],
     [2, "Annabel", "my real nickname", "the slide is stuck"]);
@@ -286,6 +303,22 @@ const run = async () => {
   assert.strictEqual((await authenticate("Annabel", "KettlePass02")).status, 200);
   me = (await mine("me", undefined, annabel)).data;
   assert.ok(me.history.some(login => login.via === "launcher" && !login.ok) && me.history.some(login => login.via === "game" && login.ok));
+
+  // --- a picture pet from the account page: theirs, waiting for a moderator,
+  // and taken back again before it is in the game
+  const petPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const petPost = (query, body) => fetch(`${BASE}/account/api/picturepets${query}`, {method: "POST", headers: {Cookie: annabel}, body});
+  const put = await petPost("?name=Pip&type=0", petPng);
+  assert.strictEqual(put.status, 200, JSON.stringify(await put.json()));
+  me = (await mine("me", undefined, annabel)).data;
+  assert.strictEqual(me.picturePets.length, 1);
+  assert.deepStrictEqual([me.picturePets[0].name, me.picturePets[0].state], ["Pip", "pending"]);
+  const petView = await fetch(`${BASE}/account/api/picturepets?view=${me.picturePets[0].num}`, {headers: {Cookie: annabel}});
+  assert.strictEqual(petView.status, 200);
+  assert.strictEqual(petView.headers.get("content-type"), "image/png");
+  assert.strictEqual((await petPost(`?delete=${me.picturePets[0].num}`, new Uint8Array(0))).status, 200);
+  me = (await mine("me", undefined, annabel)).data;
+  assert.deepStrictEqual(me.picturePets, []);
 
   assert.strictEqual((await mine("logout", {}, annabel)).status, 200);
   assert.strictEqual((await mine("me", undefined, annabel)).status, 401);

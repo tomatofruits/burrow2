@@ -390,19 +390,25 @@ package pet
             _lBits = param1;
             _uBits = param2;
             _eBits = param3;
+            if(_content.pet != null)
+         {
             PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+         }
          }
       }
       
       public function updateUBits(param1:uint) : void
       {
          _uBits = param1;
-         PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+         if(_content.pet != null)
+         {
+            PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+         }
       }
       
       public function animatePet(param1:Boolean) : void
       {
-         if(_content && "willItAnimate" in _content.pet)
+         if(_content != null && _content.pet != null && "willItAnimate" in _content.pet)
          {
             _content.pet.willItAnimate(param1);
          }
@@ -412,7 +418,10 @@ package pet
       {
          if(_content)
          {
+            if(_content.pet != null)
+         {
             _content.pet.setSparkle(param1);
+         }
          }
       }
       
@@ -426,13 +435,19 @@ package pet
             _mediaHelper.destroy();
             delete _content.mediaHelper;
             delete _content.passback;
+            if(_content.pet != null)
+         {
             PetManager.setPetState(_content,_lBits,_uBits,_eBits);
+         }
             if(_onPetLoadedCallback != null)
             {
                _onPetLoadedCallback(_content);
             }
+            if(_content.pet != null)
+         {
             _content.pet.setAnim(0);
-            if(_petDef.isEgg)
+         }
+            if(_petDef.isEgg && _content.pet != null)
             {
                if(_content.pet.hasOwnProperty("setEggDayInt"))
                {

@@ -1,10 +1,14 @@
 package
 {
    import achievement.AchievementXtCommManager;
+   import avatar.Avatar;
+   import avatar.AvatarEvent;
    import avatar.AvatarManager;
+   import avatar.AvatarView;
    import avatar.AvatarWorldView;
    import buddy.Buddy;
    import buddy.BuddyManager;
+   import collection.AccItemCollection;
    import com.sbi.corelib.audio.SBAudio;
    import com.sbi.corelib.audio.SBMusic;
    import com.sbi.corelib.audio.SBSound;
@@ -59,6 +63,7 @@ package
    import flash.utils.Timer;
    import flash.utils.getTimer;
    import flash.utils.setTimeout;
+   import game.ArtStudioKit;
    import game.MinigameManager;
    import gamePlayFlow.GamePlay;
    import gskinner.motion.GTween;
@@ -68,6 +73,7 @@ package
    import gui.GuiManager;
    import loadProgress.LoadProgress;
    import loader.DefPacksDefHelper;
+   import loader.MediaHelper;
    import localization.LocalizationManager;
    import resource.LoadAvatarCarouselResourceStackable;
    import resource.LoadCursorResourceStackable;
@@ -160,6 +166,10 @@ package
       public function AJClient()
       {
          super();
+         // which client this game is actually running: the server logs it at
+         // every login ("[client-error] (swf) client build ..."), so a game
+         // on another copy or a cached one cannot hide
+         try { GlobalErrorCatch.reportToServer("client build b1103e"); } catch(e:Error) {}
          addEventListener("addedToStage",addedToStageHandler);
       }
       
@@ -537,6 +547,18 @@ package
             {
                _toolsInstance.showItemMaker(true);
             }
+            else if(param1 == 3)
+            {
+               // the editor's Layers button: press again to close
+               if(_toolsInstance._layers != null && _toolsInstance._layers.visible)
+               {
+                  _toolsInstance.showLayers(false);
+               }
+               else
+               {
+                  _toolsInstance.showLayers(true);
+               }
+            }
             else
             {
                _toolsInstance.showItemFinder(true);
@@ -544,7 +566,7 @@ package
          }
          catch(e:Error)
          {
-            GlobalErrorCatch.reportToServer((param1 == 1 ? "chat filter: " : "item giver: ") + e + "\n" + e.getStackTrace());
+            GlobalErrorCatch.reportToServer((param1 == 1 ? "chat filter: " : param1 == 3 ? "layers: " : "item giver: ") + e + "\n" + e.getStackTrace());
          }
       }
       
@@ -750,6 +772,13 @@ package
                   delete _customArt[String(param1[2]) + ":" + _loc3_.id];
                   delete _customArtMode[String(param1[2]) + ":" + _loc3_.id];
                }
+               // a den item's picture comes out of its item file, whose name
+               // the client makes: the row's `artVersion` goes in it, so the
+               // file of a changed picture is a different one to ask for
+               if(String(param1[2]) == "den")
+               {
+                  _customArtVersion["den:" + _loc3_.id] = _loc3_.artVersion == undefined ? "" : String(_loc3_.artVersion);
+               }
             }
             if(String(param1[2]) == "den")
             {
@@ -775,6 +804,11 @@ package
       // def row): "sticker", the picture itself where the item would be, or
       // "texture", the item's own shape painted with the picture.
       private static var _customArtMode:Object = {};
+
+      // "den:id" -> a den item's picture version ("artVersion" in its def row):
+      // part of the item file's name (DenItemHelper.fileIdOf), so the file of
+      // a picture that changed is asked for anew, not answered from a cache.
+      private static var _customArtVersion:Object = {};
 
       // the pictures as bitmaps, for wearing: "kind:id" -> {bmp, art, waiting}
       private static var _artBitmaps:Object = {};
@@ -805,6 +839,14 @@ package
       public static function customArtMode(param1:String, param2:int) : String
       {
          return artOf(param1,param2) == null ? null : _customArtMode[param1 + ":" + param2];
+      }
+
+      // a den item's picture version ("" for none): the part of its item
+      // file's name that changes with the picture
+      public static function customArtVersion(param1:String, param2:int) : String
+      {
+         var _loc3_:String = _customArtVersion[param1 + ":" + param2];
+         return _loc3_ == null ? "" : _loc3_;
       }
 
       // what makes a painted frame of it different from its base's, for a
@@ -3490,6 +3532,9 @@ package
 
       private static var _emojiTable:Array; // [{name, hex, chars}]
 
+      // the staff's own, as names (lib/emojis.js, told in "xes")
+      private static var _emojiCustoms:Array = null;
+
       private static var _emojiByName:Object;
 
       private var _emojiButton:Sprite;
@@ -3501,6 +3546,24 @@ package
       private var _emojiField:TextField;
 
       private var _emojiCaret:int = -1;
+
+      // the staff's emojis extend the grid (the open cells at the bottom
+      // fill first); taller than six rows the panel is scrolled by the wheel
+      private static const EMOJI_ROWS_MAX:int = 6;
+
+      private var _emojiGrid:Sprite;
+
+      private var _emojiGridMask:Shape;
+
+      private var _emojiRows:int = 0;
+
+      private var _emojiScroll:int = 0;
+
+      // what the panel DRAWS: its height property also counts the whole
+      // scrolling grid, so it cannot be used to place it
+      private var _emojiPanelW:int = 0;
+
+      private var _emojiPanelH:int = 0;
 
 
       // the characters of code points in hex ("1f468-200d-1f469")
@@ -3524,6 +3587,490 @@ package
          return _loc2_;
       }
 
+      // "xes" from the server: the staff's own emojis, as names. a list for
+      // a joining game ([names...]) or a change for one ([a ADD | r
+      // replace | d delete, name]) (lib/emojis.js). whatever came, the
+      // tables are built anew and the panel, if it is open, redone.
+      // "xjy" from the server (the paper's pages, lib/journals.js): kept as
+      // plain fields for newspaper.NewspaperPopup, which builds its pages
+      // from them; no class of the game's is touched
+      public static var paperPages:Array = null;
+
+      public static function onJournalPages(param1:Object) : void
+      {
+         paperPages = param1;
+      }
+
+      // "xhd" from the server: the holdables of defPack 1036 (lib/holdables.js),
+      // [id, mediaId, name, ...]. the settings' picker draws each media's
+      // "attachment" art, and a pick holds it and tells the server (user var
+      // 9012), which replays it when the player enters a room.
+      public static var holdables:Array = [];
+
+      public static function onHoldables(param1:Object) : void
+      {
+         holdables = [];
+         var _loc2_:int = 2;
+         while(_loc2_ + 2 < param1.length)
+         {
+            holdables.push({id:Number(param1[_loc2_]),mediaId:Number(param1[_loc2_ + 1]),name:String(param1[_loc2_ + 2])});
+            _loc2_ += 3;
+         }
+      }
+
+      private static var _holdablePanel:Sprite = null;
+
+      private static var _holdableGrid:Sprite = null;
+
+      private static var _holdablePageText:TextField = null;
+
+      private static var _holdableVariantRow:Sprite = null;
+
+      private static var _holdablePage:int = 0;
+
+      private static const VARIANT_VAR:int = 9014;
+
+      private static const HOLDABLE_COLS:int = 5;
+
+      private static const HOLDABLE_ROWS:int = 3;
+
+      private static const HOLDABLE_CELL_W:int = 88;
+
+      private static const HOLDABLE_CELL_H:int = 88;
+
+      private static const HOLDABLE_PAGE:int = HOLDABLE_COLS * HOLDABLE_ROWS;
+
+      private static const HOLDABLE_VAR:int = 9012;
+
+      private static const NOCLIP_VAR:int = 9013;
+
+      public static function noclipOn() : Boolean
+      {
+         try
+         {
+            return Number(gMainFrame.userInfo.userVarCache.getUserVarValueById(NOCLIP_VAR)) == 1;
+         }
+         catch(e:Error)
+         {
+            return false;
+         }
+      }
+
+      public static function openHoldables() : void
+      {
+         if(_holdablePanel == null)
+         {
+            buildHoldablePanel();
+         }
+         _holdablePanel.visible = true;
+         renderHoldablePage();
+      }
+
+      private static function buildHoldablePanel() : void
+      {
+         var _loc1_:Sprite = null;
+         var _loc2_:Sprite = null;
+         var _loc3_:MovieClip = null;
+         var _loc4_:MovieClip = null;
+         var _loc5_:MovieClip = null;
+         var _loc6_:MovieClip = null;
+         var _loc7_:Sprite = null;
+         var _loc8_:int = 0;
+         _holdablePanel = new Sprite();
+         _loc1_ = new Sprite();
+         _loc1_.graphics.beginFill(0,0.45);
+         _loc1_.graphics.drawRect(0,0,900,550);
+         _loc1_.graphics.endFill();
+         _holdablePanel.addChild(_loc1_);
+         _holdablePanel.addEventListener("mouseDown",blockHoldableClick);
+         _loc2_ = new Sprite();
+         _loc2_.x = 450;
+         _loc2_.y = 275;
+         _holdablePanel.addChild(_loc2_);
+         _loc3_ = GETDEFINITIONBYNAME("ReportRulesPopupSkin");
+         _loc2_.addChild(_loc3_);
+         _loc4_ = GETDEFINITIONBYNAME("ReportRulesPopupContent");
+         _loc4_.x = _loc3_.c.x;
+         _loc4_.y = _loc3_.c.y;
+         _loc2_.addChild(_loc4_);
+         _loc4_.titleTxt.text = "Holdable Items";
+         _loc8_ = 1;
+         while(_loc8_ <= 5)
+         {
+            if(_loc4_["ruleTxt" + _loc8_])
+            {
+               _loc4_["ruleTxt" + _loc8_].visible = false;
+            }
+            if(_loc4_["ruleBodyTxt" + _loc8_])
+            {
+               _loc4_["ruleBodyTxt" + _loc8_].visible = false;
+            }
+            _loc8_++;
+         }
+         _loc3_.bx.addEventListener("mouseDown",function(param1:MouseEvent):void
+         {
+            _holdablePanel.visible = false;
+         });
+         _holdableGrid = new Sprite();
+         _holdableGrid.x = -240;
+         _holdableGrid.y = -150;
+         _loc4_.addChild(_holdableGrid);
+         _holdableVariantRow = new Sprite();
+         _holdableVariantRow.x = -235;
+         _holdableVariantRow.y = 116;
+         _holdableVariantRow.visible = false;
+         _loc4_.addChild(_holdableVariantRow);
+         _loc5_ = GETDEFINITIONBYNAME("arrow_r_btnContOld");
+         _loc5_.rotation = -90;
+         _loc5_.x = 225;
+         _loc5_.y = -100;
+         _loc5_.addEventListener("mouseDown",function(param1:MouseEvent):void
+         {
+            turnHoldablePage(-1);
+         });
+         _loc4_.addChild(_loc5_);
+         _loc6_ = GETDEFINITIONBYNAME("arrow_r_btnContOld");
+         _loc6_.rotation = 90;
+         _loc6_.x = 225;
+         _loc6_.y = 130;
+         _loc6_.addEventListener("mouseDown",function(param1:MouseEvent):void
+         {
+            turnHoldablePage(1);
+         });
+         _loc4_.addChild(_loc6_);
+         _holdablePageText = new TextField();
+         _holdablePageText.embedFonts = hasGameFont();
+         _holdablePageText.selectable = false;
+         _holdablePageText.defaultTextFormat = new TextFormat("CCDigitalDelivery",12,0x4A2C19,true);
+         _holdablePageText.width = 60;
+         _holdablePageText.height = 20;
+         _holdablePageText.x = 195;
+         _holdablePageText.y = 10;
+         _loc4_.addChild(_holdablePageText);
+         _loc7_ = holdableButton("None",62,24);
+         _loc7_.x = -235;
+         _loc7_.y = 142;
+         _loc7_.addEventListener("mouseDown",function(param1:MouseEvent):void
+         {
+            chooseHoldable(0);
+         });
+         _loc4_.addChild(_loc7_);
+         if(GuiManager.guiLayer != null)
+         {
+            GuiManager.guiLayer.addChild(_holdablePanel);
+         }
+         else
+         {
+            gMainFrame.addChild(_holdablePanel);
+         }
+      }
+
+      private static function blockHoldableClick(param1:MouseEvent) : void
+      {
+         param1.stopPropagation();
+      }
+
+      private static function holdableButton(param1:String, param2:Number, param3:Number) : Sprite
+      {
+         var _loc4_:Sprite = new Sprite();
+         var _loc5_:Shape = new Shape();
+         var _loc6_:TextField = null;
+         var _loc7_:TextFormat = null;
+         _loc5_.graphics.beginFill(0xEAF3F8,1);
+         _loc5_.graphics.drawRoundRect(0,0,param2,param3,8,8);
+         _loc5_.graphics.endFill();
+         _loc5_.graphics.lineStyle(2,0x6E4A2E,1);
+         _loc5_.graphics.drawRoundRect(0,0,param2,param3,8,8);
+         _loc4_.addChild(_loc5_);
+         _loc6_ = new TextField();
+         _loc6_.embedFonts = hasGameFont();
+         _loc6_.selectable = false;
+         _loc6_.mouseEnabled = false;
+         _loc7_ = new TextFormat("CCDigitalDelivery",13,0x4A2C19,true);
+         _loc7_.align = "center";
+         _loc6_.defaultTextFormat = _loc7_;
+         _loc6_.width = param2;
+         _loc6_.height = param3;
+         _loc6_.text = param1;
+         _loc6_.y = Math.max(0,(param3 - 18) * 0.5);
+         _loc4_.addChild(_loc6_);
+         _loc4_.buttonMode = true;
+         _loc4_.useHandCursor = true;
+         return _loc4_;
+      }
+
+      private static function turnHoldablePage(param1:int) : void
+      {
+         _holdablePage += param1;
+         renderHoldablePage();
+      }
+
+      private static function renderHoldablePage() : void
+      {
+         if(_holdableGrid == null)
+         {
+            return;
+         }
+         _holdableGrid.removeChildren();
+         if(_holdableVariantRow != null)
+         {
+            _holdableVariantRow.removeChildren();
+            _holdableVariantRow.visible = false;
+         }
+         var _loc1_:int = Math.max(1,Math.ceil(holdables.length / HOLDABLE_PAGE));
+         if(_holdablePage < 0)
+         {
+            _holdablePage = 0;
+         }
+         if(_holdablePage >= _loc1_)
+         {
+            _holdablePage = _loc1_ - 1;
+         }
+         var _loc2_:int = _holdablePage * HOLDABLE_PAGE;
+         var _loc3_:Number = Number(gMainFrame.userInfo.userVarCache.getUserVarValueById(HOLDABLE_VAR));
+         var _loc4_:int = 0;
+         while(_loc4_ < HOLDABLE_PAGE && _loc2_ + _loc4_ < holdables.length)
+         {
+            buildHoldableCell(holdables[_loc2_ + _loc4_],_loc4_ % HOLDABLE_COLS * HOLDABLE_CELL_W,Math.floor(_loc4_ / HOLDABLE_COLS) * HOLDABLE_CELL_H,_loc3_);
+            _loc4_++;
+         }
+         _holdablePageText.text = (_holdablePage + 1) + "/" + _loc1_;
+      }
+
+      private static function buildHoldableCell(param1:Object, param2:Number, param3:Number, param4:Number) : void
+      {
+         var _loc5_:Sprite = null;
+         var _loc6_:Shape = null;
+         var _loc7_:Sprite = null;
+         var _loc8_:TextField = null;
+         var _loc9_:MediaHelper = null;
+         var _loc10_:Boolean = Number(param1.id) == param4;
+         var _loc13_:Shape = null;
+         _loc5_ = new Sprite();
+         _loc5_.x = param2;
+         _loc5_.y = param3;
+         _loc6_ = new Shape();
+         _loc6_.graphics.beginFill(0xF3E3C3,1);
+         _loc6_.graphics.drawRoundRect(0,0,HOLDABLE_CELL_W - 4,HOLDABLE_CELL_H - 4,10,10);
+         _loc6_.graphics.endFill();
+         _loc6_.graphics.lineStyle(2,_loc10_ ? 0xF0C040 : 0x8A5A33,1);
+         _loc6_.graphics.drawRoundRect(0,0,HOLDABLE_CELL_W - 4,HOLDABLE_CELL_H - 4,10,10);
+         _loc5_.addChild(_loc6_);
+         _loc13_ = new Shape();
+         _loc13_.graphics.beginFill(0xFBF5E8,1);
+         _loc13_.graphics.drawRoundRect(6,6,HOLDABLE_CELL_W - 16,54,8,8);
+         _loc13_.graphics.endFill();
+         _loc13_.graphics.lineStyle(1,0xD8BE92,1);
+         _loc13_.graphics.drawRoundRect(6,6,HOLDABLE_CELL_W - 16,54,8,8);
+         _loc5_.addChild(_loc13_);
+         _loc7_ = new Sprite();
+         _loc7_.x = 12;
+         _loc7_.y = 8;
+         _loc5_.addChild(_loc7_);
+         _loc8_ = new TextField();
+         _loc8_.embedFonts = hasGameFont();
+         _loc8_.selectable = false;
+         _loc8_.mouseEnabled = false;
+         _loc8_.defaultTextFormat = new TextFormat("CCDigitalDelivery",9,0x4A2C19,true);
+         _loc8_.width = HOLDABLE_CELL_W - 8;
+         _loc8_.height = 20;
+         _loc8_.x = 2;
+         _loc8_.y = HOLDABLE_CELL_H - 22;
+         _loc8_.text = String(param1.name);
+         _loc5_.addChild(_loc8_);
+         _loc5_.buttonMode = true;
+         _loc5_.useHandCursor = true;
+         _loc5_.addEventListener("mouseDown",function(param1:MouseEvent):void
+         {
+            pickHoldable(Number(Sprite(param1.currentTarget).name));
+         });
+         _loc5_.name = String(param1.id);
+         _holdableGrid.addChild(_loc5_);
+         _loc9_ = new MediaHelper();
+         _loc9_.init(uint(param1.mediaId),function(content:MovieClip):void
+         {
+            try
+            {
+               var _loc2_:MovieClip = content["attachment"];
+               if(_loc2_ == null)
+               {
+                  _loc2_ = content["_attachment"];
+               }
+               if(_loc2_ != null)
+               {
+                  try
+                  {
+                     _loc2_.gotoAndStop("_main");
+                  }
+                  catch(e1:Error)
+                  {
+                     try
+                     {
+                        _loc2_.gotoAndStop("_show");
+                     }
+                     catch(e2:Error)
+                     {
+                     }
+                  }
+                  var _loc3_:Rectangle = _loc2_.getBounds(_loc2_);
+                  var _loc4_:Number = Math.min(60 / Math.max(1,_loc3_.width),48 / Math.max(1,_loc3_.height));
+                  _loc2_.scaleX = _loc2_.scaleY = _loc4_;
+                  _loc2_.x = (64 - _loc3_.width * _loc4_) * 0.5 - _loc3_.x * _loc4_;
+                  _loc2_.y = (52 - _loc3_.height * _loc4_) * 0.5 - _loc3_.y * _loc4_;
+                  _loc7_.addChild(_loc2_);
+               }
+            }
+            catch(e:Error)
+            {
+            }
+            _loc9_.destroy();
+         },null);
+      }
+
+      private static function pickHoldable(param1:int) : void
+      {
+         if(holdableVariants(param1).length > 0)
+         {
+            showHoldableVariants(param1);
+         }
+         else
+         {
+            chooseHoldable(param1);
+         }
+      }
+
+      // the states a holdable's media gives it by name: the smoothie's
+      // colours, the candy cane's stripes. (lib/holdables.js has the same
+      // list for what is remembered and replayed.)
+      private static function holdableVariants(param1:int) : Array
+      {
+         if(param1 == 2)
+         {
+            return [{label:"Purple",extra:"purple"},{label:"Orange",extra:"orange"},{label:"Red",extra:"red"},{label:"Yellow",extra:"yellow"}];
+         }
+         if(param1 == 10)
+         {
+            return [{label:"Red",extra:"red"},{label:"Pink",extra:"pink"},{label:"Blue",extra:"blue"},{label:"Green",extra:"green"}];
+         }
+         return [];
+      }
+
+      private static function showHoldableVariants(param1:int) : void
+      {
+         if(_holdableVariantRow == null)
+         {
+            return;
+         }
+         _holdableVariantRow.removeChildren();
+         _holdableVariantRow.visible = true;
+         var _loc2_:TextField = new TextField();
+         _loc2_.embedFonts = hasGameFont();
+         _loc2_.selectable = false;
+         _loc2_.defaultTextFormat = new TextFormat("CCDigitalDelivery",11,0x4A2C19,true);
+         _loc2_.text = "Colour";
+         _loc2_.width = 48;
+         _loc2_.height = 20;
+         _holdableVariantRow.addChild(_loc2_);
+         var _loc3_:Array = holdableVariants(param1);
+         var _loc4_:int = 0;
+         while(_loc4_ < _loc3_.length)
+         {
+            var _loc5_:Sprite = holdableButton(_loc3_[_loc4_].label,54,20);
+            _loc5_.x = 52 + _loc4_ * 58;
+            _loc5_.name = String(_loc4_);
+            _loc5_.addEventListener("mouseDown",function(param2:MouseEvent):void
+            {
+               chooseHoldable(param1,_loc3_[Number(Sprite(param2.currentTarget).name)].extra,Number(Sprite(param2.currentTarget).name));
+            });
+            _holdableVariantRow.addChild(_loc5_);
+            _loc4_++;
+         }
+      }
+
+      private static function chooseHoldable(param1:int, param2:String = "", param3:int = 0) : void
+      {
+         try
+         {
+            AvatarManager.setPlayerAttachmentEmot(param1,param2 == "" ? null : param2);
+         }
+         catch(e:Error)
+         {
+         }
+         try
+         {
+            gMainFrame.userInfo.userVarCache.updateUserVar(HOLDABLE_VAR,param1);
+            AchievementXtCommManager.requestSetUserVar(HOLDABLE_VAR,param1);
+            gMainFrame.userInfo.userVarCache.updateUserVar(VARIANT_VAR,param3);
+            AchievementXtCommManager.requestSetUserVar(VARIANT_VAR,param3);
+         }
+         catch(e:Error)
+         {
+         }
+         renderHoldablePage();
+      }
+
+      public static function onEmojis(param1:Object) : void
+      {
+         try
+         {
+            var _loc3_:String = null;
+            var _loc4_:int = 0;
+            var _loc2_:Array = String(param1[2]) == "a" || String(param1[2]) == "r" || String(param1[2]) == "d" ? null : param1.slice(2);
+            if(_loc2_ != null)
+            {
+               _emojiCustoms = _loc2_;
+            }
+            else
+            {
+               _loc3_ = String(param1[2]);
+               _loc4_ = 3;
+               if(_emojiCustoms == null)
+               {
+                  _emojiCustoms = [];
+               }
+               if(_loc3_ == "a" || _loc3_ == "r")
+               {
+                  if(_emojiCustoms.indexOf(String(param1[3])) == -1)
+                  {
+                     _emojiCustoms.push(String(param1[3]));
+                  }
+                  else
+                  {
+                     _emojiCustoms[_emojiCustoms.indexOf(String(param1[3]))] = String(param1[4] != undefined && _loc3_ == "r" ? String(param1[3]) : String(param1[3]));
+                  }
+               }
+               else if(_loc3_ == "d")
+               {
+                  _loc4_ = _emojiCustoms.indexOf(String(param1[3]));
+                  if(_loc4_ != -1)
+                  {
+                     _emojiCustoms.splice(_loc4_,1);
+                  }
+               }
+            }
+            _emojiTable = null;
+            _emojiByName = null;
+            if(_emojiPanel != null)
+            {
+               var _loc5_:Boolean = _emojiPanel.visible;
+               var _loc6_:int = _emojiPanel.x;
+               var _loc7_:int = _emojiPanel.y;
+               removeChild(_emojiPanel);
+               buildEmojiPanel();
+               if(_loc5_)
+               {
+                  _emojiPanel.visible = true;
+                  _emojiPanel.x = _loc6_;
+                  _emojiPanel.y = _loc7_;
+               }
+            }
+         }
+         catch(e:Error)
+         {
+            GlobalErrorCatch.reportToServer("emojis: " + e.message);
+         }
+      }
+
       private static function emojiTable() : Array
       {
          if(_emojiTable == null)
@@ -3536,6 +4083,15 @@ package
                var _loc3_:Object = {"name":_loc2_[0],"hex":_loc2_[1],"chars":charsOfHex(_loc2_[1])};
                _emojiTable.push(_loc3_);
                _emojiByName[_loc3_.name] = _loc3_.chars;
+            }
+            // the staff's own (lib/emojis.js, "xes"): their shortcodes become
+            // the bubble's own tokens (gui.ChatBalloon), their fill the open
+            // cells at the bottom of the grid
+            for each(_loc1_ in _emojiCustoms)
+            {
+               var _loc4_:Object = {"name":_loc1_,"hex":"","chars":":" + _loc1_ + ":","custom":true};
+               _emojiTable.push(_loc4_);
+               _emojiByName[_loc4_.name] = "\\{g-" + _loc4_.name + "}";
             }
          }
          return _emojiTable;
@@ -3596,6 +4152,10 @@ package
             return param1;
          }
          emojiTable();
+         param1 = param1.replace(new RegExp("\\\\\\{g-([a-z0-9_]{1,30})\\}","g"),function(param1:String, param2:String, ... rest):String
+         {
+            return ":" + param2 + ":";
+         });
          return param1.replace(/\\\{([0-9a-f]{2,6}(?:-[0-9a-f]{2,6}){0,9})\}/g,function(param1:String, param2:String, ... rest):String
          {
             for each(var _loc4_:Object in _emojiTable)
@@ -4179,6 +4739,11 @@ package
          _loc3_ = globalToLocal(_loc2_.localToGlobal(new Point(_loc2_.width,_loc2_.height * 0.5)));
          _emojiButton.x = int(_loc3_.x + 15);
          _emojiButton.y = int(_loc3_.y);
+         if(_emojiPanel != null && _emojiPanel.visible)
+         {
+            // it follows the bar (the HUD can move it as windows open)
+            placeEmojiPanel();
+         }
          if(getChildIndex(_emojiButton) < numChildren - 1 && (_emojiPanel == null || !_emojiPanel.visible))
          {
             setChildIndex(_emojiButton,numChildren - 1);
@@ -4196,10 +4761,39 @@ package
          _emojiPanel.visible = !_emojiPanel.visible;
          if(_emojiPanel.visible)
          {
-            _emojiPanel.x = int(Math.max(4,_emojiButton.x + 14 - _emojiPanel.width));
-            _emojiPanel.y = int(Math.max(4,_emojiButton.y - 18 - _emojiPanel.height));
+            placeEmojiPanel();
             setChildIndex(_emojiPanel,numChildren - 1);
             setChildIndex(_emojiButton,numChildren - 1);
+         }
+      }
+
+      // the grid's bottom a few pixels above the chat bar's top, its right
+      // edge at the bar's right (where the smiley sits). run on opening and
+      // every frame while it is open, so it always hugs the bar
+      private function placeEmojiPanel() : void
+      {
+         var _loc1_:Point = null;
+         if(_emojiPanel == null)
+         {
+            return;
+         }
+         try
+         {
+            _loc1_ = _emojiField != null && _emojiField.stage != null ? globalToLocal(_emojiField.localToGlobal(new Point(_emojiField.width,0))) : null;
+         }
+         catch(e:Error)
+         {
+            _loc1_ = null;
+         }
+         if(_loc1_ != null)
+         {
+            _emojiPanel.x = int(Math.max(4,_loc1_.x + 15 - _emojiPanelW));
+            _emojiPanel.y = int(Math.max(4,_loc1_.y - 6 - _emojiPanelH));
+         }
+         else
+         {
+            _emojiPanel.x = int(Math.max(4,_emojiButton.x + 14 - _emojiPanelW));
+            _emojiPanel.y = int(Math.max(4,_emojiButton.y - 18 - _emojiPanelH));
          }
       }
 
@@ -4208,32 +4802,55 @@ package
          var _loc1_:Array = emojiTable();
          var _loc2_:int = Math.ceil(_loc1_.length / EMOJI_COLUMNS);
          var _loc3_:int = EMOJI_COLUMNS * EMOJI_CELL + 12;
-         var _loc4_:int = _loc2_ * EMOJI_CELL + 36;
+         // the staff's own extend the grid: taller than six rows it is
+         // scrolled (a wheel on it, and it moves a row at a turn)
+         _emojiRows = _loc2_;
+         if(_emojiScroll > _emojiRows - EMOJI_ROWS_MAX)
+         {
+            _emojiScroll = Math.max(0,_emojiRows - EMOJI_ROWS_MAX);
+         }
+         var _loc4_:int = Math.min(_loc2_,EMOJI_ROWS_MAX) * EMOJI_CELL + 36;
+         _emojiPanelW = _loc3_;
+         _emojiPanelH = _loc4_;
          var _loc5_:int = 0;
          _emojiPanel = new Sprite();
          _emojiPanel.graphics.lineStyle(2,8349508);
          _emojiPanel.graphics.beginFill(16774084);
          _emojiPanel.graphics.drawRoundRect(0,0,_loc3_,_loc4_,14,14);
          _emojiPanel.graphics.endFill();
+         _emojiGrid = new Sprite();
          while(_loc5_ < _loc1_.length)
          {
             var _loc6_:Sprite = new Sprite();
             _loc6_.name = "emoji" + _loc5_;
             _loc6_.x = 6 + (_loc5_ % EMOJI_COLUMNS) * EMOJI_CELL + EMOJI_CELL * 0.5;
-            _loc6_.y = 6 + Math.floor(_loc5_ / EMOJI_COLUMNS) * EMOJI_CELL + EMOJI_CELL * 0.5;
+            _loc6_.y = Math.floor(_loc5_ / EMOJI_COLUMNS) * EMOJI_CELL + EMOJI_CELL * 0.5;
             _loc6_.graphics.beginFill(3184463,0);
             _loc6_.graphics.drawRoundRect(-EMOJI_CELL * 0.5,-EMOJI_CELL * 0.5,EMOJI_CELL,EMOJI_CELL,8,8);
             _loc6_.graphics.endFill();
             _loc6_.buttonMode = true;
             _loc6_.useHandCursor = true;
             _loc6_.mouseChildren = false;
-            loadArt(gMainFrame.clientInfo.websiteURL + "emoji/" + _loc1_[_loc5_].hex + ".png",_loc6_,20,false);
+            // one of the staff's: its picture is on the server too
+            loadArt(_emojiTable[_loc5_].custom ? gMainFrame.clientInfo.websiteURL + "emoji/custom/" + _emojiTable[_loc5_].name + ".png" : gMainFrame.clientInfo.websiteURL + "emoji/" + _loc1_[_loc5_].hex + ".png",_loc6_,20,false);
             _loc6_.addEventListener("mouseDown",onEmojiPick);
             _loc6_.addEventListener("mouseOver",onEmojiHover);
             _loc6_.addEventListener("mouseOut",onEmojiHover);
-            _emojiPanel.addChild(_loc6_);
+            _emojiGrid.addChild(_loc6_);
             _loc5_++;
          }
+         _emojiGridMask = new Shape();
+         _emojiGridMask.graphics.beginFill(0,1);
+         _emojiGridMask.graphics.drawRect(0,6,_loc3_,EMOJI_ROWS_MAX * EMOJI_CELL);
+         _emojiGridMask.graphics.endFill();
+         _emojiGrid.mask = _emojiGridMask;
+         _emojiPanel.addChild(_emojiGrid);
+         _emojiPanel.addChild(_emojiGridMask);
+         if(_emojiRows > EMOJI_ROWS_MAX)
+         {
+            _emojiPanel.addEventListener("mouseWheel",onEmojiWheel,false,0,true);
+         }
+         positionEmojiGrid();
          _emojiHint = new TextField();
          _emojiHint.embedFonts = hasGameFont();
          _emojiHint.selectable = false;
@@ -4243,10 +4860,26 @@ package
          _emojiHint.height = 20;
          _emojiHint.x = 8;
          _emojiHint.y = _loc4_ - 26;
-         _emojiHint.text = "Or type its name, as :fire: or :heart:";
+         _emojiHint.text = _emojiTable[_loc1_.length - 1] != null && _emojiTable[_loc1_.length - 1].custom ? "The staff\'s, in the rows below. Or type :name:" : "Or type its name, as :fire: or :heart:";
          _emojiPanel.addChild(_emojiHint);
          _emojiPanel.visible = false;
          addChild(_emojiPanel);
+      }
+
+      // the grid in its mask, at the scroll the wheel has made
+      private function positionEmojiGrid() : void
+      {
+         if(_emojiGrid != null)
+         {
+            _emojiGrid.y = 6 - _emojiScroll * EMOJI_CELL;
+         }
+      }
+
+      private function onEmojiWheel(param1:MouseEvent) : void
+      {
+         param1.stopPropagation();
+         _emojiScroll = Math.max(0,Math.min(_emojiRows - EMOJI_ROWS_MAX,_emojiScroll + (param1.delta > 0 ? -1 : 1)));
+         positionEmojiGrid();
       }
 
       private function onEmojiHover(param1:MouseEvent) : void
@@ -4918,6 +5551,458 @@ package
          _loc3_.load(_loc2_);
       }
 
+      // ---- Clothing Layers (the avatar editor): the order one animal draws
+      // what it wears in, top down. the list is the animal's worn clothing
+      // with number 1 drawn over the rest. moving a row redraws the animal at
+      // once and sends the new order to the server ("xly" [.., order as item
+      // inventory ids]), which keeps it on the animal and sends everyone in
+      // the room the animal wearing it in that order. "reset" puts back the
+      // order the items were got in; the server answers every "xly" with the
+      // order it kept (xly [1, ...ids]).
+      //
+      // a small popup in the editor's bottom left, under the animal; clicks
+      // around it stay with the editor.
+      private static const LAYER_WIDTH:int = 232;
+
+      private static const LAYER_HEIGHT:int = 248;
+
+      private static const LAYER_ROWS:int = 5;
+
+      private var _layers:Sprite;
+
+      private var _layerPanel:Sprite;
+
+      private var _layerList:Sprite;
+
+      private var _layerStatus:TextField;
+
+      private var _layerPage:int = 0;
+
+      private function buildLayers() : void
+      {
+         var _loc1_:MovieClip = null;
+         var _loc2_:TextField = null;
+         _layers = new Sprite();
+         _layerPanel = new Sprite();
+         _layerPanel.x = 14;
+         _layerPanel.y = 550 - LAYER_HEIGHT - 12;
+         _layers.addChild(_layerPanel);
+         ArtStudioKit.panel(_layerPanel,0,0,LAYER_WIDTH,LAYER_HEIGHT);
+         // the build stamp: proof of which client is actually running (a
+         // server on another copy, or a cached one, shows no stamp)
+         _loc2_ = ArtStudioKit.text("Layers - build b1103e",15,ArtStudioKit.TEXT_LIGHT,LAYER_WIDTH - 24);
+         _loc2_.x = 12;
+         _loc2_.y = 8;
+         _layerPanel.addChild(_loc2_);
+         _layerStatus = ArtStudioKit.text("Top is drawn over the rest",11,ArtStudioKit.TEXT_LIGHT,LAYER_WIDTH - 24);
+         _layerStatus.x = 12;
+         _layerStatus.y = 30;
+         _layerPanel.addChild(_layerStatus);
+         _layerList = new Sprite();
+         _layerList.x = 0;
+         _layerList.y = 50;
+         _layerPanel.addChild(_layerList);
+         _loc1_ = ArtStudioKit.button(null,"Draw them in the order they were got",94,26,onLayerReset,"Reset");
+         _loc1_.x = 12;
+         _loc1_.y = LAYER_HEIGHT - 34;
+         _layerPanel.addChild(_loc1_);
+         _loc1_ = ArtStudioKit.button(null,"Close",94,26,onLayerDone,"Done");
+         _loc1_.x = LAYER_WIDTH - 106;
+         _loc1_.y = LAYER_HEIGHT - 34;
+         _layerPanel.addChild(_loc1_);
+         _layers.visible = false;
+         addChild(_layers);
+      }
+
+      private function showLayers(param1:Boolean) : void
+      {
+         if(!param1)
+         {
+            if(_layers != null)
+            {
+               _layers.visible = false;
+            }
+            gMainFrame.stage.focus = null;
+            return;
+         }
+         if(_layers == null)
+         {
+            buildLayers();
+         }
+         _layerPage = 0;
+         layerRows();
+         _layers.visible = true;
+         setChildIndex(_layers,numChildren - 1);
+      }
+
+      // what the animal on screen wears, first drawn first. the collection
+      // carries everything the player owns for this room; a worn one says so
+      // itself (item.getInUse).
+      private function layersWorn() : Array
+      {
+         var _loc1_:Array = [];
+         // the editor's own preview carries what is being tried on (its copy
+         // of the collection wears it before the server does), and it is the
+         // animal the panel arranges while the editor is open
+         var _loc2_:Avatar = GuiManager.avatarEditor != null && GuiManager.avatarEditor.previewView != null && GuiManager.avatarEditor.previewView.parent != null ? GuiManager.avatarEditor.previewView.avatarData : null;
+         if(_loc2_ == null)
+         {
+            _loc2_ = AvatarManager.playerAvatar;
+         }
+         if(_loc2_ == null || _loc2_.inventoryClothing == null || _loc2_.inventoryClothing.itemCollection == null)
+         {
+            return _loc1_;
+         }
+         var _loc3_:AccItemCollection = _loc2_.inventoryClothing.itemCollection;
+         var _loc4_:Item = null;
+         var _loc5_:int = 0;
+         while(_loc5_ < _loc3_.length)
+         {
+            _loc4_ = _loc3_.getAccItem(_loc5_) as Item;
+            if(_loc4_ != null && _loc4_.getInUse(_loc2_.avInvId))
+            {
+               _loc1_.push(_loc4_);
+            }
+            _loc5_++;
+         }
+         return _loc1_;
+      }
+
+      // numberOfRows x numberOfPages as the game's list pages have them
+      private function layerRows() : void
+      {
+         var _loc1_:MovieClip = null;
+         var _loc2_:Shape = null;
+         var _loc3_:TextField = null;
+         var _loc4_:Item = null;
+         var _loc5_:Array = layersWorn();
+         var _loc6_:int = _loc5_.length;
+         var _loc7_:int = Math.max(1,Math.ceil(_loc6_ / LAYER_ROWS));
+         if(_layerPage >= _loc7_)
+         {
+            _layerPage = _loc7_ - 1;
+         }
+         if(_layerPage < 0)
+         {
+            _layerPage = 0;
+         }
+         var _loc8_:int = _layerPage * LAYER_ROWS;
+         var _loc9_:int = Math.min(LAYER_ROWS,_loc6_ - _loc8_);
+         var _loc11_:int = 0;
+         var _loc12_:Number = 0;
+         if(_loc6_ == 0)
+         {
+            _layerStatus.text = "This animal is not wearing anything.";
+         }
+         else if(_loc7_ > 1)
+         {
+            _layerStatus.text = _loc6_ + " worn, page " + (_layerPage + 1) + " of " + _loc7_ + ".";
+         }
+         else
+         {
+            _layerStatus.text = _loc6_ + " worn.";
+         }
+         while(_layerList.numChildren > 0)
+         {
+            _layerList.removeChildAt(0);
+         }
+         var _loc10_:int = 0;
+         while(_loc10_ < _loc9_)
+         {
+            // the row's place in what is drawn (0 = over the rest), and the
+            // item: the list runs bottom first
+            _loc11_ = _loc8_ + _loc10_;
+            _loc4_ = _loc5_[_loc6_ - 1 - _loc11_] as Item;
+            _loc12_ = _loc10_ * 26;
+            _loc2_ = new Shape();
+            _loc2_.graphics.beginFill(16777215,0.07);
+            _loc2_.graphics.drawRoundRect(12,_loc12_,LAYER_WIDTH - 24,24,6,6);
+            _loc2_.graphics.endFill();
+            _layerList.addChild(_loc2_);
+            _loc3_ = ArtStudioKit.text(_loc11_ + 1 + ".",11,ArtStudioKit.TEXT_LIGHT,20,"center");
+            _loc3_.x = 14;
+            _loc3_.y = _loc12_ + 5;
+            _layerList.addChild(_loc3_);
+            _loc3_ = ArtStudioKit.text(layerShort(_loc4_ == null ? "" : _loc4_.name,20),11,ArtStudioKit.TEXT_LIGHT,128);
+            _loc3_.x = 38;
+            _loc3_.y = _loc12_ + 5;
+            _layerList.addChild(_loc3_);
+            _loc1_ = ArtStudioKit.button("up","Draw this over the item above",24,20,onLayerMove);
+            _loc1_.x = 168;
+            _loc1_.y = _loc12_ + 2;
+            _loc1_.layerRow = _loc11_;
+            _loc1_.layerDir = 1;
+            ArtStudioKit.setEnabled(_loc1_,_loc11_ > 0);
+            _layerList.addChild(_loc1_);
+            _loc1_ = ArtStudioKit.button("down","Draw this under the item below",24,20,onLayerMove);
+            _loc1_.x = 194;
+            _loc1_.y = _loc12_ + 2;
+            _loc1_.layerRow = _loc11_;
+            _loc1_.layerDir = -1;
+            ArtStudioKit.setEnabled(_loc1_,_loc11_ < _loc6_ - 1);
+            _layerList.addChild(_loc1_);
+            _loc10_++;
+         }
+         // another page of the worn, only when they do not all fit
+         if(_loc7_ > 1)
+         {
+            _loc1_ = ArtStudioKit.button(null,"The five drawn before these",64,22,onLayerPage,"Prev");
+            _loc1_.x = 30;
+            _loc1_.y = _loc9_ * 26 + 6;
+            _loc1_.layerDir = -1;
+            ArtStudioKit.setEnabled(_loc1_,_layerPage > 0);
+            _layerList.addChild(_loc1_);
+            _loc1_ = ArtStudioKit.button(null,"The five drawn after these",64,22,onLayerPage,"Next");
+            _loc1_.x = LAYER_WIDTH - 94;
+            _loc1_.y = _loc9_ * 26 + 6;
+            _loc1_.layerDir = 1;
+            ArtStudioKit.setEnabled(_loc1_,_layerPage < _loc7_ - 1);
+            _layerList.addChild(_loc1_);
+         }
+      }
+
+      private static function layerShort(param1:String, param2:int) : String
+      {
+         return param1.length > param2 ? param1.substr(0,param2 - 3) + "..." : param1;
+      }
+
+      private function onLayerMove(param1:MouseEvent) : void
+      {
+         var _loc2_:MovieClip = param1.currentTarget as MovieClip;
+         layerMove(int(_loc2_.layerRow),int(_loc2_.layerDir));
+      }
+
+      private function onLayerPage(param1:MouseEvent) : void
+      {
+         _layerPage = _layerPage + int((param1.currentTarget as MovieClip).layerDir);
+         layerRows();
+      }
+
+      private function onLayerReset(param1:MouseEvent) : void
+      {
+         gMainFrame.server.setXtObject_Str("xly",["reset"]);
+      }
+
+      private function onLayerDone(param1:MouseEvent) : void
+      {
+         showLayers(false);
+      }
+
+      // moves the row shown at param1: up (param2 1) draws it over the item
+      // above, down (param2 -1) under the item below.
+      private function layerMove(param1:int, param2:int) : void
+      {
+         var _loc3_:Array = layersWorn();
+         var _loc4_:int = _loc3_.length;
+         var _loc5_:int = _loc4_ - 1 - param1;
+         var _loc6_:int = _loc5_ + param2;
+         if(_loc5_ < 0 || _loc6_ < 0 || _loc6_ >= _loc4_)
+         {
+            return;
+         }
+         var _loc7_:Array = [];
+         var _loc8_:int = 0;
+         while(_loc8_ < _loc4_)
+         {
+            _loc7_.push(int((_loc3_[_loc8_] as Item).invIdx));
+            _loc8_++;
+         }
+         var _loc9_:int = _loc7_[_loc5_];
+         _loc7_[_loc5_] = _loc7_[_loc6_];
+         _loc7_[_loc6_] = _loc9_;
+         applyLayerOrder(_loc7_);
+         // keep the moved row on the page it is now shown on
+         _layerPage = int((param1 + param2) / LAYER_ROWS);
+         layerRows();
+         gMainFrame.server.setXtObject_Str("xly",_loc7_);
+      }
+
+      // puts an animal's worn clothes in the drawing order given as item
+      // inventory ids, bottom first. they swap places among the collection
+      // slots the worn ones fill, so everything unworn stays where it is.
+      // false when the order does not name exactly the collection's worn items.
+      private static function reorderWorn(param1:AccItemCollection, param2:Array, param3:int) : Boolean
+      {
+         var _loc6_:Item = null;
+         var _loc4_:Array = [];
+         var _loc5_:Array = [];
+         var _loc7_:int = 0;
+         while(_loc7_ < param1.length)
+         {
+            _loc6_ = param1.getAccItem(_loc7_) as Item;
+            if(_loc6_ != null && _loc6_.getInUse(param3))
+            {
+               _loc4_.push(_loc7_);
+               _loc5_.push(_loc6_);
+            }
+            _loc7_++;
+         }
+         if(_loc5_.length == 0)
+         {
+            return false;
+         }
+         // the order names ids; anything it does not name keeps its place
+         var _loc8_:Array = [];
+         var _loc9_:Array = [];
+         var _loc10_:int = 0;
+         var _loc11_:int = 0;
+         _loc10_ = 0;
+         while(_loc10_ < param2.length)
+         {
+            _loc11_ = int(param2[_loc10_]);
+            _loc7_ = 0;
+            while(_loc7_ < _loc5_.length)
+            {
+               if(_loc9_.indexOf(_loc7_) == -1 && int((_loc5_[_loc7_] as Item).invIdx) == _loc11_)
+               {
+                  _loc9_.push(_loc7_);
+                  _loc8_.push(_loc5_[_loc7_]);
+                  break;
+               }
+               _loc7_++;
+            }
+            _loc10_++;
+         }
+         _loc7_ = 0;
+         while(_loc7_ < _loc5_.length)
+         {
+            if(_loc9_.indexOf(_loc7_) == -1)
+            {
+               _loc8_.push(_loc5_[_loc7_]);
+            }
+            _loc7_++;
+         }
+         if(_loc8_.length != _loc4_.length)
+         {
+            return false;
+         }
+         var _loc12_:Array = param1.getCoreArray().concat();
+         _loc7_ = 0;
+         while(_loc7_ < _loc4_.length)
+         {
+            _loc12_[int(_loc4_[_loc7_])] = _loc8_[_loc7_];
+            _loc7_++;
+         }
+         param1.setCoreArray(_loc12_);
+         return true;
+      }
+
+      public function applyLayerOrder(param1:Array) : void
+      {
+         var _loc2_:Avatar = AvatarManager.playerAvatar;
+         if(_loc2_ == null || _loc2_.inventoryClothing == null || _loc2_.inventoryClothing.itemCollection == null)
+         {
+            return;
+         }
+         if(!reorderWorn(_loc2_.inventoryClothing.itemCollection,param1,_loc2_.avInvId))
+         {
+            return;
+         }
+         try { _loc2_.layersOrder = param1.concat(); } catch(e:Error) {}
+         _loc2_.dispatchEvent(new AvatarEvent("OnAvatarChanged"));
+         // the animal editor's preview wears a copy of the collection
+         // (AvatarEditorView.init): arrange it too, and have it drawn again
+         var _loc3_:AvatarView = GuiManager.avatarEditor != null ? GuiManager.avatarEditor.previewView : null;
+         if(_loc3_ != null && _loc3_.avatarData != null && _loc3_.avatarData.inventoryClothing != null
+            && _loc3_.avatarData.inventoryClothing.itemCollection != null
+            && reorderWorn(_loc3_.avatarData.inventoryClothing.itemCollection,param1,_loc3_.avatarData.avInvId))
+         {
+            _loc3_.avatarData.dispatchEvent(new AvatarEvent("OnAvatarChanged"));
+         }
+      }
+
+      // "xly" [1, ...the order kept]: the server's word on the arrangement
+      // (kept and applied by AJClient.noteLayers); the open panel re-lists
+      public function layersAnswer(param1:Object) : void
+      {
+         if(_layers != null && _layers.visible)
+         {
+            layerRows();
+         }
+      }
+
+   // the animal editor is closing: take its Layers popup with it
+   public static function closeLayers() : void
+   {
+      if(_toolsInstance != null)
+      {
+         _toolsInstance.showLayers(false);
+      }
+   }
+
+   // worn arrangements kept per animal (avInvId -> the item inventory ids to
+   // draw in, bottom first). avatars are reused and re-inited as rooms change
+   // (Avatar.init clears their fields), so the orders live here.
+   public static var layersKept:Object = {};
+
+   // the server's word on a worn arrangement ("xly" [1, the animal's
+   // avInvId, ...inventory ids, bottom first]): kept per animal in
+   // layersKept; an order that already is the inventory's own (the reset's,
+   // ascending ids) means none is kept. the animal's id comes on the wire,
+   // so the order is kept whether or not the avatar object is up yet. the
+   // collection order follows too (applyLayerOrder).
+   public static function noteLayers(param1:Object) : void
+   {
+      var _loc3_:Array = null;
+      if(param1 == null || param1.length < 4 || String(param1[2]) != "1")
+      {
+         return;
+      }
+      var _loc6_:String = null;
+      try { _loc6_ = String(gMainFrame.userInfo.myUserName).toLowerCase(); } catch(e:Error) { _loc6_ = null; }
+      if(_loc6_ == null)
+      {
+         return;
+      }
+      _loc6_ = _loc6_ + ":" + int(param1[3]);
+      _loc3_ = [];
+      var _loc2_:int = 4;
+      while(_loc2_ < param1.length)
+      {
+         _loc3_.push(int(param1[_loc2_]));
+         _loc2_++;
+      }
+      var _loc5_:Boolean = _loc3_.length >= 2;
+      _loc4_ = 0;
+      while(_loc5_ && _loc4_ < _loc3_.length - 1)
+      {
+         if(int(_loc3_[_loc4_]) > int(_loc3_[_loc4_ + 1]))
+         {
+            _loc5_ = false;
+            break;
+         }
+         _loc4_++;
+      }
+      if(_loc5_)
+      {
+         delete layersKept[_loc6_];
+      }
+      else
+      {
+         layersKept[_loc6_] = _loc3_.concat();
+      }
+      if(_toolsInstance != null)
+      {
+         try { _toolsInstance.applyLayerOrder(_loc3_); } catch(e:Error) {}
+      }
+   }
+
+   public static function onLayers(param1:Object) : void
+   {
+      noteLayers(param1);
+      if(_toolsInstance != null)
+      {
+         try
+         {
+            _toolsInstance.layersAnswer(param1);
+         }
+         catch(e:Error)
+         {
+            GlobalErrorCatch.reportToServer("layers: " + e + "\n" + e.getStackTrace());
+         }
+      }
+   }
+
       private function onFinderKey(param1:KeyboardEvent) : void
       {
          if(param1.eventPhase == 3)
@@ -4928,6 +6013,15 @@ package
          // the Item Maker and the staff's window: Esc closes them, Enter
          // searches (in the Item Maker's search box), and no key gets past
          // them to the game (which would take typing for its chat bar).
+         if(_layers != null && _layers.visible)
+         {
+            if(param1.keyCode == 27)
+            {
+               showLayers(false);
+            }
+            param1.stopImmediatePropagation();
+            return;
+         }
          if(_maker != null && _maker.visible)
          {
             if(param1.keyCode == 27)

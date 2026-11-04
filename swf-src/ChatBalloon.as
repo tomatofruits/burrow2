@@ -593,6 +593,16 @@ package gui
             // an emoji as it is sent: "\{1f600}" (AJClient.emojiToTokens)
             if(param1.substr(_loc3_,2) == "\\{")
             {
+               var _locEmo_:Array = new RegExp("^\\\\\\{g-([a-z0-9_]{1,30})\\}").exec(param1.substr(_loc3_,90));
+               if(_locEmo_ != null)
+               {
+                  _inline.push({
+                     "at":_loc2_.length,
+                     "clip":emojiClipNamed("g-" + _locEmo_[1])
+                  });
+                  _loc2_ += INLINE_GAP + INLINE_END;
+                  _loc3_ += String(_locEmo_[0]).length;
+               }
                var _loc9_:Array = /^\\\{([0-9a-f]{2,6}(?:-[0-9a-f]{2,6}){0,9})\}/.exec(param1.substr(_loc3_,90));
                if(_loc9_ != null)
                {
@@ -784,7 +794,7 @@ package gui
          _loc2_.graphics.endFill();
          _loc2_.mouseEnabled = false;
          _loc2_.mouseChildren = false;
-         AJClient.loadArt(gMainFrame.clientInfo.websiteURL + "emoji/" + param1 + ".png",_loc2_,72,false);
+         AJClient.loadArt(gMainFrame.clientInfo.websiteURL + (param1.charAt(0) == "g" ? "emoji/custom/" + param1.substr(2) : "emoji/" + param1) + ".png",_loc2_,72,false);
          return _loc2_;
       }
 
