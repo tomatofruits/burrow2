@@ -99,6 +99,40 @@ service environment to change that (for example `720` for 30 days). Staff can
 tick "Trust this browser" to skip the 2FA code on that browser for 30 days
 without turning 2FA off.
 
+### Launcher installer
+
+The `/download` page is generated from `config.downloadsDir`, which is
+`data/downloads` unless `AJ_DOWNLOADS_DIR` says otherwise. Put the Windows
+installer there with exactly this name:
+
+```sh
+mkdir -p /home/aj/ajc-private-server/data/downloads
+cp /path/to/Burrow-Setup.exe /home/aj/ajc-private-server/data/downloads/
+```
+
+The Windows row then appears by itself; no server restart is needed for a file
+already in place. The other names the page understands are in `DOWNLOADS` in
+`lib/http.js`: `Burrow-macos.dmg`, `Burrow-x86_64.AppImage`,
+`burrow_amd64.deb` and `burrow.x86_64.rpm`. If your installer has a different
+name, rename it to one of those or add the name in both `DOWNLOADS` and
+`DOWNLOAD_PATH` in `lib/http.js`.
+
+Optional files beside the installer:
+
+- `RELEASES` — one line per file: `Burrow-Setup.exe 1.1.0 2026-10-14`
+- `SHA256SUMS` — checksums, linked at the bottom of `/download`
+
+The home page's **Download** button uses `config.downloadUrl`. Set it to the
+download page, or to an outside address such as a GitHub release:
+
+```sh
+AJ_DOWNLOAD_URL=/download
+```
+
+An unset value leaves the button as "Soon". `data/` is ignored by Git, so the
+installer is not uploaded by a normal push; copy it to the VPS separately or
+download it there.
+
 `swf/ajclient.swf` is the built client and is kept in Git, so a VPS that pulls
 it does not need Java or the decompiler. If you rebuild it locally with
 `tools/build-client.sh`, commit the new file with the source changes.
