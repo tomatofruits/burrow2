@@ -297,6 +297,18 @@ package avatar
       
       private var _glow:GlowFilter;
       
+      // the animal glow (lib/glow.js): the colour the game's own outline uses
+      // (setBlendColor), and the configuration last painted, if any.
+      private var _glowOutlineColor:uint = 0;
+      
+      private var _glowConfig:Object = null;
+      
+      private var _glowVersion:int = -1;
+      
+      private var _glowPerUserAvId:int = -1;
+      
+      private var _glowLastPaint:int = 0;
+      
       private var _splashLiquid:String;
       
       private var _bInSplashVolume:Boolean;
@@ -590,6 +602,7 @@ package avatar
          _glow = new GlowFilter(0,1,4,4,4);
          _layerAnim.bitmap.filters = [_glow];
          setBlendColor();
+         updateGlow(true);
          _splash = new AvatarViewExt_Splash(this,_loc10_);
          if(_roomType == 1)
          {
@@ -1071,13 +1084,195 @@ package avatar
                param2 = uint(param1 & 0xFFFFFF);
             }
          }
-         if(_layerAnim.bitmap.filters != null && _layerAnim.bitmap.filters[0].color != param2)
+         _glowOutlineColor = param2;
+         if((_glowConfig == null || String(_glowConfig.mode) == "none")
+            && _layerAnim.bitmap.filters != null && _layerAnim.bitmap.filters[0] == _glow
+            && _glow.color != param2)
          {
-            _loc4_ = _layerAnim.bitmap.filters;
-            _loc4_[0].color = param2;
-            _layerAnim.bitmap.filters = _loc4_;
+            _glow.color = param2;
+            _layerAnim.bitmap.filters = [_glow];
          }
          _layerAnim.bitmap.setBlendColor(param1);
+      }
+      
+      // The account's glow (lib/glow.js, "xgl" in AJClient). The whole avatar,
+      // its items included, is one bitmap, so a GlowFilter around it surrounds
+      // everything the animal wears. Called every frame, but only repaints
+      // when the server sent a new glow or the mode itself is animated.
+      private function updateGlow(param1:Boolean = false) : void
+      {
+         var _loc2_:Object = null;
+         var _loc3_:int = 0;
+         if(_layerAnim == null || _layerAnim.bitmap == null)
+         {
+            return;
+         }
+         if(param1 || _glowVersion != AJClient.glowVersion || _glowPerUserAvId != perUserAvId)
+         {
+            _glowVersion = AJClient.glowVersion;
+            _glowPerUserAvId = perUserAvId;
+            _glowConfig = AJClient.glowOf(userName,perUserAvId);
+            applyGlow(_glowConfig);
+            return;
+         }
+         if(_glowConfig == null || String(_glowConfig.mode) == "none")
+         {
+            return;
+         }
+         if(String(_glowConfig.mode) != "cycle" && String(_glowConfig.mode) != "rainbow")
+         {
+            return;
+         }
+         _loc3_ = getTimer();
+         if(_loc3_ - _glowLastPaint < 40)
+         {
+            return;
+         }
+         _glowLastPaint = _loc3_;
+         applyGlow(_glowConfig);
+      }
+      
+      private function applyGlow(param1:Object) : void
+      {
+         var _loc2_:Array = null;
+         var _loc3_:String = null;
+         var _loc4_:String = null;
+         var _loc5_:int = 0;
+         var _loc6_:Number = NaN;
+         var _loc7_:Number = NaN;
+         var _loc8_:Number = NaN;
+         var _loc9_:uint = 0;
+         var _loc10_:Array = null;
+         var _loc11_:int = 0;
+         var _loc12_:int = 0;
+         var _loc13_:Number = NaN;
+         var _loc14_:uint = 0;
+         var _loc15_:GlowFilter = null;
+         var _loc16_:Array = null;
+         if(param1 == null || String(param1.mode) == "none")
+         {
+            _glow.color = _glowOutlineColor;
+            _glow.alpha = 1;
+            _glow.blurX = 4;
+            _glow.blurY = 4;
+            _glow.strength = 4;
+            _glow.quality = 1;
+            _glow.inner = false;
+            _glow.knockout = false;
+            if(_layerAnim != null && _layerAnim.bitmap != null)
+            {
+               _layerAnim.bitmap.filters = [_glow];
+            }
+            return;
+         }
+         _loc2_ = param1.colors as Array;
+         if(_loc2_ == null || _loc2_.length == 0)
+         {
+            _loc2_ = [0x8B5CF6];
+         }
+         _loc3_ = String(param1.mode);
+         _loc4_ = String(param1.look);
+         _loc5_ = Math.max(1,Math.min(5,int(param1.runs)));
+         _loc6_ = Math.max(2,Math.min(24,Number(param1.thickness)));
+         _loc7_ = Math.max(0.2,Math.min(1,Number(param1.brightness) / 100));
+         _loc8_ = getTimer() / 1000;
+         _loc10_ = [0xFF0000,0xFFFF00,0x00FF00,0x00FFFF,0x0000FF,0xFF00FF];
+         _loc9_ = uint(_loc2_[0]);
+         if(_loc3_ == "cycle")
+         {
+            _loc9_ = glowPalette(_loc2_,_loc8_ * 0.2);
+         }
+         else if(_loc3_ == "rainbow")
+         {
+            _loc9_ = glowPalette(_loc10_,_loc8_ * 0.15);
+         }
+         _glow.color = _loc9_;
+         _glow.alpha = _loc7_;
+         _glow.blurX = _glow.blurY = _loc4_ == "outline" ? _loc6_ : _loc6_ * 1.25;
+         _glow.strength = _loc4_ == "outline" ? 6 : 2;
+         _glow.quality = 1;
+         _glow.inner = false;
+         _glow.knockout = false;
+         _loc16_ = [_glow];
+         if(_loc3_ == "rings")
+         {
+            _loc11_ = Math.min(5,2 + _loc5_ * 2);
+         }
+         else if(_loc3_ == "gradient")
+         {
+            _loc11_ = Math.min(6,2 + _loc5_ * 2);
+         }
+         else if(_loc3_ == "rainbow")
+         {
+            _loc11_ = Math.min(5,2 + _loc5_);
+         }
+         else if(_loc3_ == "cycle")
+         {
+            _loc11_ = Math.min(3,1 + _loc5_);
+         }
+         else
+         {
+            _loc11_ = 0;
+         }
+         _loc12_ = 1;
+         while(_loc12_ <= _loc11_)
+         {
+            _loc13_ = _loc12_ / (_loc11_ + 1);
+            if(_loc3_ == "rings")
+            {
+               _loc14_ = uint(_loc2_[_loc12_ % _loc2_.length]);
+            }
+            else if(_loc3_ == "gradient")
+            {
+               _loc14_ = glowPalette(_loc2_,(_loc13_ * _loc5_) % 1);
+            }
+            else if(_loc3_ == "rainbow")
+            {
+               _loc14_ = glowPalette(_loc10_,(_loc8_ * 0.15 + _loc13_) % 1);
+            }
+            else
+            {
+               _loc14_ = glowPalette(_loc2_,(_loc8_ * 0.2 + _loc13_) % 1);
+            }
+            _loc15_ = new GlowFilter(_loc14_,_loc7_ * (1 - _loc13_ * 0.75),_loc6_ * (1 + _loc12_ * 0.55),_loc6_ * (1 + _loc12_ * 0.55),_loc4_ == "outline" ? 4 : 2,1,false,false);
+            _loc16_.push(_loc15_);
+            _loc12_++;
+         }
+         _layerAnim.bitmap.filters = _loc16_;
+      }
+      
+      private function glowPalette(param1:Array, param2:Number) : uint
+      {
+         var _loc3_:int = param1.length;
+         var _loc4_:Number = NaN;
+         var _loc5_:int = 0;
+         var _loc6_:int = 0;
+         if(_loc3_ == 0)
+         {
+            return 0;
+         }
+         if(_loc3_ == 1)
+         {
+            return uint(param1[0]);
+         }
+         _loc4_ = (param2 % 1 + 1) % 1 * _loc3_;
+         _loc5_ = int(_loc4_) % _loc3_;
+         _loc6_ = (_loc5_ + 1) % _loc3_;
+         return glowMix(uint(param1[_loc5_]),uint(param1[_loc6_]),_loc4_ - int(_loc4_));
+      }
+      
+      private function glowMix(param1:uint, param2:uint, param3:Number) : uint
+      {
+         var _loc4_:int = param1 >> 16 & 0xFF;
+         var _loc5_:int = param1 >> 8 & 0xFF;
+         var _loc6_:int = param1 & 0xFF;
+         var _loc7_:int = param2 >> 16 & 0xFF;
+         var _loc8_:int = param2 >> 8 & 0xFF;
+         var _loc9_:int = param2 & 0xFF;
+         var _loc10_:int = Math.round(_loc4_ + (_loc7_ - _loc4_) * param3);
+         var _loc11_:int = Math.round(_loc5_ + (_loc8_ - _loc5_) * param3);
+         var _loc12_:int = Math.round(_loc6_ + (_loc9_ - _loc6_) * param3);
+         return _loc10_ << 16 | _loc11_ << 8 | _loc12_;
       }
       
       public function setAlphaLevel(param1:int) : void
@@ -1655,6 +1850,7 @@ package avatar
             updateSlide(param1);
          }
          _frameTime = param2 / 1000;
+         updateGlow();
          _timeSinceLastHostingUpdate += _frameTime;
          if(_frameTime > 0.5)
          {

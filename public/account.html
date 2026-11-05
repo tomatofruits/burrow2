@@ -197,6 +197,17 @@
       @keyframes chatFlow { to { background-position: 100% 100%; } }
       @keyframes chatRainbow { to { filter: hue-rotate(360deg); } }
       @media (max-width: 440px) { .chat-style-grid { grid-template-columns: 1fr; } }
+      .glow-layout { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
+      .glow-stage { display: grid; place-items: center; min-height: 300px; border: 1px solid var(--line); border-radius: 18px; background: radial-gradient(circle at 50% 62%, #202838, #0a0c11 72%); overflow: hidden; }
+      .glow-stage img { width: min(92%, 240px); height: auto; }
+      .glow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+      .glow-grid input[type="color"] { width: 100%; height: 42px; padding: 3px; cursor: pointer; }
+      .glow-colours { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+      .glow-colours input[type="color"] { width: 100%; height: 42px; padding: 3px; cursor: pointer; }
+      .glow-quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+      .glow-swatch { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+      .glow-swatch:hover { border-color: var(--text); }
+      @media (max-width: 620px) { .glow-layout { grid-template-columns: 1fr; } .glow-grid { grid-template-columns: 1fr; } }
       #ban-section pre { margin: 0 0 12px; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
       #ban-section h3 { margin: 18px 0 0; }
     </style>
@@ -435,6 +446,73 @@
           <p class="status" id="chat-style-status" role="status"></p>
         </section>
 
+        <section id="animal-glow">
+          <h2>Animal glow</h2>
+          <p>Give your animal and everything it wears a coloured glow. Everyone in the room sees it, from the moment you save.</p>
+          <div class="glow-layout">
+            <div class="glow-stage">
+              <img id="glow-preview" src="/signup/hero_bunny.svg" alt="Preview of your animal's glow">
+            </div>
+            <form id="glow-form">
+              <div class="glow-grid">
+                <div>
+                  <label for="glow-mode">Mode</label>
+                  <select id="glow-mode">
+                    <option value="none">None</option>
+                    <option value="solid">One colour</option>
+                    <option value="rings">Rings of colours</option>
+                    <option value="gradient">Gradient</option>
+                    <option value="cycle">Colour cycle</option>
+                    <option value="rainbow">Rainbow</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="glow-look">Look</label>
+                  <select id="glow-look">
+                    <option value="glow">Soft glow</option>
+                    <option value="outline">Crisp outline</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="glow-colour-count">Colours</label>
+                  <select id="glow-colour-count">
+                    <option value="1">1 colour</option>
+                    <option value="2">2 colours</option>
+                    <option value="3">3 colours</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="glow-show-on">Show on</label>
+                  <select id="glow-show-on">
+                    <option value="all">All my animals</option>
+                    <option value="current">Only my current animal</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="glow-thickness">Thickness <span class="hint" id="glow-thickness-value"></span></label>
+                  <input id="glow-thickness" type="range" min="2" max="24" step="1" value="8">
+                </div>
+                <div>
+                  <label for="glow-brightness">Brightness <span class="hint" id="glow-brightness-value"></span></label>
+                  <input id="glow-brightness" type="range" min="20" max="100" step="1" value="85">
+                </div>
+                <div>
+                  <label for="glow-runs">Gradient runs <span class="hint" id="glow-runs-value"></span></label>
+                  <input id="glow-runs" type="range" min="1" max="5" step="1" value="2">
+                </div>
+              </div>
+              <div class="glow-colours" style="margin-top:10px">
+                <div id="glow-colour-1-box"><label for="glow-colour-1">Colour 1</label><input id="glow-colour-1" type="color" value="#8b5cf6"></div>
+                <div id="glow-colour-2-box"><label for="glow-colour-2">Colour 2</label><input id="glow-colour-2" type="color" value="#22d3ee"></div>
+                <div id="glow-colour-3-box"><label for="glow-colour-3">Colour 3</label><input id="glow-colour-3" type="color" value="#f472b6"></div>
+              </div>
+              <div class="glow-quick" id="glow-quick" aria-label="Quick colours"></div>
+              <div class="row"><button class="primary" type="submit">Save glow</button><button id="glow-none" type="button">No glow</button></div>
+              <p class="status" id="glow-status" role="status"></p>
+            </form>
+          </div>
+        </section>
+
         <section>
           <h2>Playtime</h2>
           <p id="playtime-text"></p>
@@ -588,6 +666,14 @@
       const DEFAULT_CHAT_STYLE = {background: "ffffff", accent: "dfe8ff", text: "445559", border: "9aabb0", opacity: 75,
         animation: "none", speed: 100, gradient: "linear", angle: 45, strength: 100, outline: 1,
         stops: "ffffff:0;dfe8ff:100"};
+      // the account's animal glow (lib/glow.js). colours are six hex digits,
+      // without the "#", as the server stores them.
+      const DEFAULT_GLOW = {mode: "none", colors: ["8b5cf6", "22d3ee", "f472b6"], look: "glow",
+        thickness: 8, brightness: 85, runs: 2, showOn: "all"};
+      const GLOW_HEROES = {1: "tiger", 4: "wolf", 5: "koala", 6: "panda", 7: "monkey", 8: "bunny", 13: "rhino", 18: "seal", 24: "penguin"};
+      const GLOW_QUICK = ["ff3b30", "ff9500", "ffcc00", "34c759", "00c7be", "007aff", "5856d6", "af52de", "ff2d55", "ffffff"];
+      let glowRaf = 0;
+      let activeGlowColour = 1;
 
       let account = null;
       let chatStops = [];
@@ -712,6 +798,143 @@
           holder.append(row);
         });
         $("chat-stop-add").disabled = chatStops.length >= 5;
+      };
+
+      const glowHex = hex => [0, 2, 4].map(at => parseInt(hex.slice(at, at + 2), 16));
+
+      const glowMix = (one, two, amount) => {
+        const first = glowHex(one);
+        const second = glowHex(two);
+        return first.map((part, index) => Math.round(part + (second[index] - part) * amount).toString(16).padStart(2, "0")).join("");
+      };
+
+      const glowPalette = (colors, position) => {
+        if (!colors.length) return "ffffff";
+        if (colors.length === 1) return colors[0];
+        const scaled = (((position % 1) + 1) % 1) * colors.length;
+        const index = Math.floor(scaled) % colors.length;
+        return glowMix(colors[index], colors[(index + 1) % colors.length], scaled - Math.floor(scaled));
+      };
+
+      const glowRgba = (hex, alpha) => `rgba(${glowHex(hex).join(", ")}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+
+      const glowValue = () => {
+        const count = Math.max(1, Math.min(3, Number($("glow-colour-count").value) || 1));
+        return {
+          mode: $("glow-mode").value,
+          colors: Array.from({length: count}, (unused, index) => $(`glow-colour-${index + 1}`).value.slice(1).toLowerCase()),
+          look: $("glow-look").value,
+          thickness: Number($("glow-thickness").value),
+          brightness: Number($("glow-brightness").value),
+          runs: Number($("glow-runs").value),
+          showOn: $("glow-show-on").value,
+        };
+      };
+
+      const showGlowColours = () => {
+        const count = Number($("glow-colour-count").value) || 1;
+        [1, 2, 3].forEach(index => { $(`glow-colour-${index}-box`).hidden = index > count; });
+      };
+
+      const paintGlowPreview = () => {
+        const glow = glowValue();
+        const preview = $("glow-preview");
+        const hero = GLOW_HEROES[account && account.animalType] || "bunny";
+        const source = `/signup/hero_${hero}.svg`;
+        if (preview.getAttribute("src") !== source) preview.src = source;
+        $("glow-thickness-value").textContent = `${glow.thickness}px`;
+        $("glow-brightness-value").textContent = `${glow.brightness}%`;
+        $("glow-runs-value").textContent = `${glow.runs}×`;
+        if (glow.mode === "none") {
+          preview.style.filter = "none";
+          return;
+        }
+        const colors = glow.colors;
+        const radius = glow.thickness;
+        const alpha = glow.brightness / 100;
+        const now = performance.now() / 1000;
+        const rainbow = ["ff0000", "ffff00", "00ff00", "00ffff", "0000ff", "ff00ff"];
+        const shadows = [];
+        const add = (color, blur, strength) => shadows.push(`drop-shadow(0 0 ${blur.toFixed(1)}px ${glowRgba(color, strength)})`);
+        const primary = glow.mode === "cycle" ? glowPalette(colors, now * 0.2)
+          : glow.mode === "rainbow" ? glowPalette(rainbow, now * 0.15) : colors[0];
+        add(primary, radius, alpha);
+        if (glow.look === "outline") add(primary, Math.max(1, radius * 0.35), Math.min(1, alpha * 1.2));
+        if (glow.mode === "solid") {
+          add(primary, radius * 0.6, alpha * 0.8);
+          add(primary, radius * 1.35, alpha * 0.45);
+        }
+        else if (glow.mode === "rings") {
+          const bands = Math.min(5, 2 + glow.runs * 2);
+          for (let index = 1; index <= bands; index++) {
+            add(colors[index % colors.length], radius * (1 + index * 0.55), alpha * (1 - index / (bands + 1) * 0.8));
+          }
+        }
+        else if (glow.mode === "gradient") {
+          const bands = Math.min(6, 2 + glow.runs * 2);
+          for (let index = 1; index <= bands; index++) {
+            add(glowPalette(colors, index / (bands + 1) * glow.runs % 1), radius * (1 + index * 0.55), alpha * (1 - index / (bands + 1) * 0.8));
+          }
+        }
+        else {
+          const bands = glow.mode === "rainbow" ? Math.min(5, 2 + glow.runs) : Math.min(3, 1 + glow.runs);
+          const palette = glow.mode === "rainbow" ? rainbow : colors;
+          const step = glow.mode === "rainbow" ? 0.15 : 0.2;
+          for (let index = 1; index <= bands; index++) {
+            add(glowPalette(palette, (now * step + index / (bands + 1)) % 1),
+              radius * (1 + index * 0.55), alpha * (1 - index / (bands + 1) * 0.8));
+          }
+        }
+        preview.style.filter = shadows.join(" ");
+      };
+
+      const glowTick = () => {
+        glowRaf = 0;
+        if (!account || $("page").hidden) return;
+        paintGlowPreview();
+        const mode = $("glow-mode").value;
+        if (mode === "cycle" || mode === "rainbow") {
+          glowRaf = requestAnimationFrame(glowTick);
+        }
+      };
+
+      const startGlowTick = () => {
+        if (!glowRaf) glowRaf = requestAnimationFrame(glowTick);
+      };
+
+      const fillGlow = value => {
+        const glow = {...DEFAULT_GLOW, ...value};
+        const saved = Array.isArray(glow.colors) ? glow.colors.slice(0, 3) : [];
+        const colors = saved.length ? saved : DEFAULT_GLOW.colors.slice();
+        while (colors.length < 3) colors.push(DEFAULT_GLOW.colors[colors.length]);
+        $("glow-colour-count").value = String(Math.max(1, Math.min(3, saved.length || 3)));
+        [1, 2, 3].forEach(index => { $(`glow-colour-${index}`).value = `#${colors[index - 1]}`; });
+        $("glow-mode").value = glow.mode;
+        $("glow-look").value = glow.look;
+        $("glow-thickness").value = String(glow.thickness);
+        $("glow-brightness").value = String(glow.brightness);
+        $("glow-runs").value = String(glow.runs);
+        $("glow-show-on").value = glow.showOn;
+        showGlowColours();
+        paintGlowPreview();
+        startGlowTick();
+      };
+
+      const buildGlowQuick = () => {
+        const holder = $("glow-quick");
+        holder.replaceChildren(...GLOW_QUICK.map(color => {
+          const button = el("button", undefined, "glow-swatch");
+          button.type = "button";
+          button.style.background = `#${color}`;
+          button.title = `#${color}`;
+          button.setAttribute("aria-label", `Use #${color}`);
+          button.addEventListener("click", () => {
+            $(`glow-colour-${activeGlowColour}`).value = `#${color}`;
+            paintGlowPreview();
+            startGlowTick();
+          });
+          return button;
+        }));
       };
 
       const fillChatStyle = style => {
@@ -1058,6 +1281,13 @@
         $("lock-notice").hidden = !account.locked;
         if (!$("chat-style-form").contains(document.activeElement)) {
           fillChatStyle(account.chatStyle);
+        }
+        if (!$("glow-form").contains(document.activeElement)) {
+          fillGlow(account.glow);
+        }
+        else {
+          paintGlowPreview();
+          startGlowTick();
         }
 
         const tiles = [
@@ -1747,6 +1977,32 @@
       $("chat-style-reset").addEventListener("click", async () => {
         fillChatStyle(DEFAULT_CHAT_STYLE);
         await act({action: "chatStyle", style: DEFAULT_CHAT_STYLE}, "chat-style-status");
+      });
+
+      buildGlowQuick();
+      ["glow-mode", "glow-look", "glow-colour-count", "glow-show-on", "glow-thickness", "glow-brightness", "glow-runs",
+        "glow-colour-1", "glow-colour-2", "glow-colour-3"].forEach(id => {
+        const changed = () => {
+          if (id === "glow-colour-count") showGlowColours();
+          paintGlowPreview();
+          startGlowTick();
+        };
+        $(id).addEventListener("input", changed);
+        $(id).addEventListener("change", changed);
+      });
+      [1, 2, 3].forEach(index => {
+        $(`glow-colour-${index}`).addEventListener("focus", () => { activeGlowColour = index; });
+        $(`glow-colour-${index}`).addEventListener("pointerdown", () => { activeGlowColour = index; });
+      });
+      $("glow-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        await act({action: "glow", glow: glowValue()}, "glow-status");
+      });
+      $("glow-none").addEventListener("click", async () => {
+        await act({action: "glow", glow: {...glowValue(), mode: "none"}}, "glow-status");
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) startGlowTick();
       });
 
       // off to Discord's sign-in; it comes back to /account?discord=<how it went>

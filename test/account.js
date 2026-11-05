@@ -66,6 +66,23 @@ const run = async () => {
   // the wrong password and the sign-in are both in her history, newest first.
   assert.deepStrictEqual(me.history.map(login => [login.via, login.ok]), [["web", true], ["web", false]]);
 
+  // --- the animal glow (lib/glow.js): validated on the page, then sent to
+  // the game as "xgl" so every client can paint it.
+  const annGame = await arrive("Ann", "KettlePass01");
+  const glow = {mode: "gradient", colors: ["ff0066", "00ccff", "ffcc00"], look: "glow",
+    thickness: 12, brightness: 80, runs: 3, showOn: "all"};
+  assert.strictEqual((await mine("act", {action: "glow", glow}, ann)).status, 200);
+  // the game that is already in a room is told at once, without a reload.
+  assert.deepStrictEqual((await annGame.client.untilXt("xgl")).slice(2),
+    ["Ann", "gradient", "ff0066,00ccff,ffcc00", "glow", "12", "80", "3", "all", "1"]);
+  me = (await mine("me", undefined, ann)).data;
+  assert.deepStrictEqual(me.glow, glow);
+  assert.strictEqual((await mine("act", {action: "glow", glow: {...glow, mode: "bogus"}}, ann)).status, 400);
+  assert.strictEqual((await mine("act", {action: "glow", glow: {...glow, colors: ["red"]}}, ann)).status, 400);
+  assert.strictEqual((await mine("act", {action: "glow", glow: {...glow, thickness: 99}}, ann)).status, 400);
+  assert.deepStrictEqual((await mine("me", undefined, ann)).data.glow, glow);
+  annGame.client.socket.destroy();
+
   // --- signing in with the Burrow client: the page's nonce, the client's
   // token for a ticket, and the ticket only for the browser that started it
   const clientStart = async () => {
