@@ -536,7 +536,7 @@ const run = async () => {
   const notBanned = await a.untilXt("xbn");
   assert.deepStrictEqual(notBanned.slice(2, 4), ["Alice", "0"]);
   assert.ok(Number(notBanned[4]) > 1700000000); // and when she joined
-  assert.deepStrictEqual(notBanned.slice(5), ["", "early|Early Member", ""]); // no Discord username; the badge of the first hundred accounts; no bio (lib/badges.js)
+  assert.deepStrictEqual(notBanned.slice(5), ["", "", ""]); // no Discord username; no automatic Early Member badge; no bio (lib/badges.js)
   assert.strictEqual((await fetch(`${BASE}/ban-icon.png`)).headers.get("content-type"), "image/png");
   const carolAgain = new GameClient();
   await carolAgain.connect();
