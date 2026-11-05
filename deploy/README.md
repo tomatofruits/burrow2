@@ -93,6 +93,12 @@ site-specific values in the service environment rather than editing tracked
 files such as `config.js`; a modified tracked file is exactly what makes a
 fast-forward refuse to run.
 
+A staff dashboard sign-in lasts 7 days by default, and the Discord bot's
+commands work for as long as it lasts. Set `AJ_STAFF_SESSION_HOURS` in the
+service environment to change that (for example `720` for 30 days). Staff can
+tick "Trust this browser" to skip the 2FA code on that browser for 30 days
+without turning 2FA off.
+
 `swf/ajclient.swf` is the built client and is kept in Git, so a VPS that pulls
 it does not need Java or the decompiler. If you rebuild it locally with
 `tools/build-client.sh`, commit the new file with the source changes.
