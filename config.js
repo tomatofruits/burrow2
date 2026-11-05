@@ -368,6 +368,10 @@ module.exports = {
   // after 75 minutes of that (com.sbi.client.KeepAlive): the socket waits longer.
   idleTimeoutMs: 80 * 60000,
   tokenLifetimeDays: 30, // login tokens kept by the launcher's "remember me"
+  // how long a staff dashboard sign-in lasts, in hours. The Discord bot's
+  // commands use the same sign-in, so this is how long they keep working
+  // after one 2FA sign-in. Default: a week (AJ_STAFF_SESSION_HOURS).
+  staffSessionHours: Math.max(1, Math.round(Number(env.AJ_STAFF_SESSION_HOURS) || 168)),
   // a line as sent: the client's chat box takes 200 (gui.ChatHistory), and
   // each emoji goes as a tag of 8 or more ("\{1f600}"). lib/chatspam.js
   // cuts down what is long for no good reason.

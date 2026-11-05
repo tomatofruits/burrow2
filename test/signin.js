@@ -126,10 +126,20 @@ const run = async mail => {
   const wrong = await mod("/dashboard/api/staff/discord/code", {body: {code: "000000"}});
   assert.strictEqual(wrong.status, 401);
   assert.strictEqual(wrong.data.expired, undefined);
-  const right = await mod("/dashboard/api/staff/discord/code", {body: {code: await freshCode("Mira", secrets.Mira)}});
+  const right = await mod("/dashboard/api/staff/discord/code", {body: {code: await freshCode("Mira", secrets.Mira), rememberDevice: true}});
   assert.strictEqual(right.status, 200, JSON.stringify(right.data));
   assert.strictEqual(right.data.username, "Mira");
   assert.ok(mod.has("ajc_mod") && !mod.has("ajc_mod_pending"));
+  // the browser was trusted, so Discord alone finishes the next sign-in,
+  // and a password sign-in there needs no code either.
+  assert.ok(mod.has("ajc_mod_device"));
+  const trustedAgain = await throughDiscord(mod, "/dashboard/staff/discord/login", "/dashboard/staff/discord/callback", "mira");
+  assert.strictEqual(trustedAgain.location, "/dashboard/staff");
+  assert.ok(mod.has("ajc_mod") && !mod.has("ajc_mod_pending"));
+  assert.strictEqual((await mod("/dashboard/api/staff/logout", {body: {}})).status, 200);
+  const noCode = await mod("/dashboard/api/staff/login", {body: {username: "Mira", password: people.Mira}});
+  assert.strictEqual(noCode.status, 200, JSON.stringify(noCode.data));
+  assert.ok(mod.has("ajc_mod"));
   assert.strictEqual((await mod("/dashboard/api/staff/state")).data.signedIn, true);
   // a waiting sign-in is used once
   const again = await mod("/dashboard/api/staff/discord/code", {body: {code: await freshCode("Mira", secrets.Mira)}});

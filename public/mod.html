@@ -127,6 +127,8 @@
       .notice .hint { display: block; margin: 6px 0 0 24px; }
       @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
       label.check { margin: 0; color: var(--text); font-size: 14px; cursor: pointer; }
+      #gate label.check { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; }
+      #gate label.check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex: none; }
       #item-colours { display: flex; gap: 6px 14px; flex-wrap: wrap; margin-top: 8px; }
       #item-colours label.check { display: inline-flex; gap: 5px; align-items: center; }
       ul.plain { list-style: none; padding: 0; margin: 10px 0 0; }
@@ -450,7 +452,8 @@
         <label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password" maxlength="100" required>
         <label for="code">2FA code</label>
-        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false" required>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false">
+        <label class="check"><input id="remember-device" type="checkbox"> Trust this browser for 30 days</label>
         <div id="captcha"></div>
         <button class="primary" id="gate-button">Sign in</button>
       </form>
@@ -458,10 +461,12 @@
         <p class="hint">Discord confirmed who you are. Enter your 2FA code to finish signing in.</p>
         <label for="discord-code">2FA code</label>
         <input id="discord-code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false" required>
+        <label class="check"><input id="discord-remember-device" type="checkbox"> Trust this browser for 30 days</label>
         <button class="primary" id="discord-code-button">Finish signing in</button>
       </form>
       <button type="button" id="discord-sign-in" hidden>Sign in with Discord</button>
       <p class="hint" id="discord-gate-hint" hidden>Use the Discord account linked to your active staff account.</p>
+      <p class="hint" id="session-hint"></p>
       <p class="status" id="gate-status" role="status"></p>
     </main>
 
@@ -3515,7 +3520,8 @@
           setStatus($("gate-status"), window.captcha.FAILED, true);
           return;
         }
-        const result = await api("login", {username: $("username").value, password: $("password").value, code: $("code").value.trim(), captcha: answer});
+        const result = await api("login", {username: $("username").value, password: $("password").value, code: $("code").value.trim(),
+          rememberDevice: $("remember-device").checked, captcha: answer});
         check.reset();
         $("gate-button").disabled = false;
         if (result.ok) {
@@ -3543,7 +3549,8 @@
       $("discord-code-form").addEventListener("submit", async event => {
         event.preventDefault();
         $("discord-code-button").disabled = true;
-        const result = await api("discord/code", {code: $("discord-code").value.trim()});
+        const result = await api("discord/code", {code: $("discord-code").value.trim(),
+          rememberDevice: $("discord-remember-device").checked});
         $("discord-code-button").disabled = false;
         $("discord-code").value = "";
         if (result.ok) {
@@ -3571,6 +3578,12 @@
       const start = async () => {
         const result = await api("state");
         discordLogin = Boolean(result.ok && result.data.discordLogin);
+        if (result.ok) {
+          const hours = Number(result.data.sessionHours) || 168;
+          const days = Number(result.data.deviceDays) || 30;
+          const lasts = hours >= 48 ? `${Math.round(hours / 24)} days` : `${hours} hour${hours === 1 ? "" : "s"}`;
+          $("session-hint").textContent = `A sign-in lasts ${lasts}. Tick "Trust this browser" to skip the 2FA code here for ${days} days.`;
+        }
         if (result.ok && result.data.signedIn) {
           showPanel(result.data.username);
         }

@@ -150,6 +150,11 @@ package
             AJClient.onHoldables(param1.obj);
             return;
          }
+         if(param1.obj[0] == "xgl")
+         {
+            AJClient.onGlow(param1.obj);
+            return;
+         }
          if(param1.obj[0] == "xmn")
          {
             AJClient.onMentions(param1.obj);

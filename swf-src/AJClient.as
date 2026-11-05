@@ -3607,6 +3607,60 @@ package
       // 9012), which replays it when the player enters a room.
       public static var holdables:Array = [];
 
+      // "xgl" from the server: an account's animal glow (lib/glow.js), sent
+      // before the avatar enters a room and again whenever its owner saves a
+      // new one. keyed by the lowercased username; AvatarWorldView paints it.
+      public static var glowConfigs:Object = {};
+
+      public static var glowVersion:int = 0;
+
+      public static function onGlow(param1:Object) : void
+      {
+         var _loc2_:String = String(param1[2]).toLowerCase();
+         var _loc3_:Array = [];
+         var _loc4_:Array = String(param1[4] || "").split(",");
+         var _loc5_:int = 0;
+         while(_loc5_ < _loc4_.length)
+         {
+            if(/^[0-9a-fA-F]{6}$/.test(_loc4_[_loc5_]))
+            {
+               _loc3_.push(parseInt(_loc4_[_loc5_],16));
+            }
+            _loc5_++;
+         }
+         glowConfigs[_loc2_] = {
+            "mode":String(param1[3] || "none"),
+            "colors":_loc3_,
+            "look":String(param1[5] || "glow"),
+            "thickness":Number(param1[6]) || 8,
+            "brightness":Number(param1[7]) || 85,
+            "runs":Number(param1[8]) || 2,
+            "showOn":String(param1[9] || "all"),
+            "perUserAvId":Number(param1[10]) || 1
+         };
+         glowVersion++;
+      }
+
+      // the glow an avatar view should paint, or null when this animal is not
+      // one the player chose ("show on: only my current animal") or none is set.
+      public static function glowOf(param1:String, param2:int) : Object
+      {
+         if(!param1)
+         {
+            return null;
+         }
+         var _loc3_:Object = glowConfigs[param1.toLowerCase()];
+         if(!_loc3_)
+         {
+            return null;
+         }
+         if(_loc3_.showOn == "current" && Number(_loc3_.perUserAvId) != param2)
+         {
+            return null;
+         }
+         return _loc3_;
+      }
+
       public static function onHoldables(param1:Object) : void
       {
          holdables = [];

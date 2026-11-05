@@ -108,10 +108,10 @@ class GameClient {
       // question which filter to use ("xfa", on the first room) and the
       // buddy list with when each was last seen ("bl", "xls": at login) come unasked.
       // so do the order clothes are drawn in ("xly", after a full item list),
-      // the emoji chart ("xes"), the Jamaa Journal's pages ("xjy") and the
-      // holdables list ("xhd").
+      // the emoji chart ("xes"), the Jamaa Journal's pages ("xjy"), the
+      // holdables list ("xhd") and an avatar's glow ("xgl", before its "ac").
       if ((fields[0] === "xfl" || fields[0] === "xfa" || fields[0] === "bl" || fields[0] === "xls" || fields[0] === "xly"
-        || fields[0] === "xes" || fields[0] === "xjy" || fields[0] === "xhd") && cmd !== fields[0]) {
+        || fields[0] === "xes" || fields[0] === "xjy" || fields[0] === "xhd" || fields[0] === "xgl") && cmd !== fields[0]) {
         continue;
       }
       if (this.unasked(fields)) {
