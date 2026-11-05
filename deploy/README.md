@@ -103,23 +103,24 @@ without turning 2FA off.
 
 The `/download` page is generated from `config.downloadsDir`, which is
 `data/downloads` unless `AJ_DOWNLOADS_DIR` says otherwise. Put the Windows
-installer there with exactly this name:
+installer there as `Hideout-Setup.exe` (or `Burrow-Setup.exe`; both names are
+accepted):
 
 ```sh
 mkdir -p /home/aj/ajc-private-server/data/downloads
-cp /path/to/Burrow-Setup.exe /home/aj/ajc-private-server/data/downloads/
+cp /path/to/Hideout-Setup.exe /home/aj/ajc-private-server/data/downloads/
 ```
 
 The Windows row then appears by itself; no server restart is needed for a file
 already in place. The other names the page understands are in `DOWNLOADS` in
 `lib/http.js`: `Burrow-macos.dmg`, `Burrow-x86_64.AppImage`,
-`burrow_amd64.deb` and `burrow.x86_64.rpm`. If your installer has a different
+`burrow_amd64.deb` and `burrow.x86_64.rpm`. If an installer has a different
 name, rename it to one of those or add the name in both `DOWNLOADS` and
 `DOWNLOAD_PATH` in `lib/http.js`.
 
 Optional files beside the installer:
 
-- `RELEASES` — one line per file: `Burrow-Setup.exe 1.1.0 2026-10-14`
+- `RELEASES` — one line per file: `Hideout-Setup.exe 1.1.0 2026-10-14`
 - `SHA256SUMS` — checksums, linked at the bottom of `/download`
 
 The home page's **Download** button uses `config.downloadUrl`. Set it to the
