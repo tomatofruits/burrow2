@@ -81,7 +81,34 @@ const run = async () => {
   assert.strictEqual((await mine("act", {action: "glow", glow: {...glow, colors: ["red"]}}, ann)).status, 400);
   assert.strictEqual((await mine("act", {action: "glow", glow: {...glow, thickness: 99}}, ann)).status, 400);
   assert.deepStrictEqual((await mine("me", undefined, ann)).data.glow, glow);
+
+  // Each animal has its own glow, and switching animals publishes that
+  // animal's glow rather than the account's.
+  annGame.client.xt("aa", annGame.roomId, 15136, 15224, 15299, 5, -1);
+  const added = await annGame.client.nextXt("aa");
+  assert.strictEqual(added[2], "1");
+  const secondAnimal = Number(added[3]);
+  const secondGlow = {...glow, mode: "solid", colors: ["112233"]};
+  assert.strictEqual((await mine("act", {action: "glow", animal: secondAnimal, glow: secondGlow}, ann)).status, 200);
+  me = (await mine("me", undefined, ann)).data;
+  assert.deepStrictEqual(me.glowAnimals.find(animal => animal.perUserAvId === 1).glow, glow);
+  assert.deepStrictEqual(me.glowAnimals.find(animal => animal.perUserAvId === secondAnimal).glow, secondGlow);
+  assert.strictEqual((await mine("act", {action: "glow", animal: 9999, glow: secondGlow}, ann)).status, 400);
+  annGame.client.xt("as", annGame.roomId, secondAnimal);
+  await annGame.client.nextXt("as");
+  assert.deepStrictEqual((await annGame.client.untilXt("xgl")).slice(2),
+    ["Ann", "solid", "112233", "glow", "12", "80", "3", "all", String(secondAnimal)]);
   annGame.client.socket.destroy();
+
+  // signing out and back in re-sends the active animal's own glow
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const relog = new harness.GameClient(GAME_PORT);
+  await relog.connect();
+  const again = await (await authenticate("Ann", "KettlePass01")).json();
+  assert.strictEqual((await relog.logIn("Ann", again.auth_token)).status, "1");
+  assert.deepStrictEqual((await relog.untilXt("xgl")).slice(2),
+    ["Ann", "solid", "112233", "glow", "12", "80", "3", "all", String(secondAnimal)]);
+  relog.socket.destroy();
 
   // --- signing in with the Burrow client: the page's nonce, the client's
   // token for a ticket, and the ticket only for the browser that started it

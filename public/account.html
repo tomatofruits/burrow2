@@ -455,6 +455,10 @@
             </div>
             <form id="glow-form">
               <div class="glow-grid">
+                <div style="grid-column:1/-1">
+                  <label for="glow-animal">Animal</label>
+                  <select id="glow-animal"></select>
+                </div>
                 <div>
                   <label for="glow-mode">Mode</label>
                   <select id="glow-mode">
@@ -479,13 +483,6 @@
                     <option value="1">1 colour</option>
                     <option value="2">2 colours</option>
                     <option value="3">3 colours</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="glow-show-on">Show on</label>
-                  <select id="glow-show-on">
-                    <option value="all">All my animals</option>
-                    <option value="current">Only my current animal</option>
                   </select>
                 </div>
                 <div>
@@ -674,6 +671,7 @@
       const GLOW_QUICK = ["ff3b30", "ff9500", "ffcc00", "34c759", "00c7be", "007aff", "5856d6", "af52de", "ff2d55", "ffffff"];
       let glowRaf = 0;
       let activeGlowColour = 1;
+      let selectedGlowAnimal = null;
 
       let account = null;
       let chatStops = [];
@@ -827,7 +825,8 @@
           thickness: Number($("glow-thickness").value),
           brightness: Number($("glow-brightness").value),
           runs: Number($("glow-runs").value),
-          showOn: $("glow-show-on").value,
+          showOn: "all",
+          animal: selectedGlowAnimal,
         };
       };
 
@@ -839,7 +838,9 @@
       const paintGlowPreview = () => {
         const glow = glowValue();
         const preview = $("glow-preview");
-        const hero = GLOW_HEROES[account && account.animalType] || "bunny";
+        const chosen = glowAnimal();
+        const type = chosen ? chosen.type : account && account.animalType;
+        const hero = GLOW_HEROES[type] || "bunny";
         const source = `/signup/hero_${hero}.svg`;
         if (preview.getAttribute("src") !== source) preview.src = source;
         $("glow-thickness-value").textContent = `${glow.thickness}px`;
@@ -902,6 +903,33 @@
         if (!glowRaf) glowRaf = requestAnimationFrame(glowTick);
       };
 
+      const glowAnimal = () => ((account && account.glowAnimals) || [])
+        .find(animal => Number(animal.perUserAvId) === Number(selectedGlowAnimal)) || null;
+
+      const renderGlowAnimals = () => {
+        const animals = account && account.glowAnimals && account.glowAnimals.length
+          ? account.glowAnimals
+          : [{perUserAvId: (account && account.activeAnimal) || 1, type: account && account.animalType,
+            name: account ? account.username : "", glow: account && account.glow}];
+        if (!selectedGlowAnimal || !animals.some(animal => Number(animal.perUserAvId) === Number(selectedGlowAnimal))) {
+          selectedGlowAnimal = (account && account.activeAnimal) || animals[0].perUserAvId;
+          if (!animals.some(animal => Number(animal.perUserAvId) === Number(selectedGlowAnimal))) {
+            selectedGlowAnimal = animals[0].perUserAvId;
+          }
+        }
+        $("glow-animal").replaceChildren(...animals.map((animal, index) => {
+          const option = document.createElement("option");
+          option.value = String(animal.perUserAvId);
+          const type = ANIMALS[animal.type] || "Animal";
+          const name = String(animal.name || "").trim();
+          // animals made in the game keep name ids such as "15136|15224|15299"
+          const readable = name && !name.includes("|") && !/^\d+$/.test(name);
+          option.textContent = readable ? `${name} · ${type}` : `Animal ${index + 1} · ${type}`;
+          return option;
+        }));
+        $("glow-animal").value = String(selectedGlowAnimal);
+      };
+
       const fillGlow = value => {
         const glow = {...DEFAULT_GLOW, ...value};
         const saved = Array.isArray(glow.colors) ? glow.colors.slice(0, 3) : [];
@@ -914,7 +942,6 @@
         $("glow-thickness").value = String(glow.thickness);
         $("glow-brightness").value = String(glow.brightness);
         $("glow-runs").value = String(glow.runs);
-        $("glow-show-on").value = glow.showOn;
         showGlowColours();
         paintGlowPreview();
         startGlowTick();
@@ -1283,9 +1310,11 @@
           fillChatStyle(account.chatStyle);
         }
         if (!$("glow-form").contains(document.activeElement)) {
-          fillGlow(account.glow);
+          renderGlowAnimals();
+          fillGlow(glowAnimal() ? glowAnimal().glow : account.glow);
         }
         else {
+          renderGlowAnimals();
           paintGlowPreview();
           startGlowTick();
         }
@@ -1980,7 +2009,7 @@
       });
 
       buildGlowQuick();
-      ["glow-mode", "glow-look", "glow-colour-count", "glow-show-on", "glow-thickness", "glow-brightness", "glow-runs",
+      ["glow-mode", "glow-look", "glow-colour-count", "glow-thickness", "glow-brightness", "glow-runs",
         "glow-colour-1", "glow-colour-2", "glow-colour-3"].forEach(id => {
         const changed = () => {
           if (id === "glow-colour-count") showGlowColours();
@@ -1993,6 +2022,11 @@
       [1, 2, 3].forEach(index => {
         $(`glow-colour-${index}`).addEventListener("focus", () => { activeGlowColour = index; });
         $(`glow-colour-${index}`).addEventListener("pointerdown", () => { activeGlowColour = index; });
+      });
+      $("glow-animal").addEventListener("change", () => {
+        selectedGlowAnimal = Number($("glow-animal").value);
+        const animal = glowAnimal();
+        fillGlow(animal ? animal.glow : DEFAULT_GLOW);
       });
       $("glow-form").addEventListener("submit", async event => {
         event.preventDefault();

@@ -127,6 +127,8 @@
       .notice .hint { display: block; margin: 6px 0 0 24px; }
       @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
       label.check { margin: 0; color: var(--text); font-size: 14px; cursor: pointer; }
+      #gate label.check { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; }
+      #gate label.check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex: none; }
       #item-colours { display: flex; gap: 6px 14px; flex-wrap: wrap; margin-top: 8px; }
       #item-colours label.check { display: inline-flex; gap: 5px; align-items: center; }
       ul.plain { list-style: none; padding: 0; margin: 10px 0 0; }
@@ -451,7 +453,7 @@
         <input id="password" type="password" autocomplete="current-password" maxlength="100" required>
         <label for="code">2FA code</label>
         <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false">
-        <label class="check" style="display:flex;align-items:center;gap:7px;margin-top:10px"><input id="remember-device" type="checkbox"> Trust this browser for 30 days</label>
+        <label class="check"><input id="remember-device" type="checkbox"> Trust this browser for 30 days</label>
         <div id="captcha"></div>
         <button class="primary" id="gate-button">Sign in</button>
       </form>
@@ -459,7 +461,7 @@
         <p class="hint">Discord confirmed who you are. Enter your 2FA code to finish signing in.</p>
         <label for="discord-code">2FA code</label>
         <input id="discord-code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false" required>
-        <label class="check" style="display:flex;align-items:center;gap:7px;margin-top:10px"><input id="discord-remember-device" type="checkbox"> Trust this browser for 30 days</label>
+        <label class="check"><input id="discord-remember-device" type="checkbox"> Trust this browser for 30 days</label>
         <button class="primary" id="discord-code-button">Finish signing in</button>
       </form>
       <button type="button" id="discord-sign-in" hidden>Sign in with Discord</button>
